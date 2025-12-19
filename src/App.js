@@ -1,21 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, User, Plus, Minus, ShoppingCart, History, Settings, LogOut, LogIn, CreditCard, Key, Mail, Users, Trophy, Crown, Gift, Wallet, PiggyBank, Cloud, Shield, Edit, AlertTriangle, CheckCircle, XCircle, Clock, Save, Trash2, DollarSign, FolderPlus, Folder, ChevronUp, ChevronDown, Maximize2, UserMinus, FolderMinus, FileText, UserPlus } from 'lucide-react';
-
-// Mock professor credentials
-let PROFESSOR_EMAIL = "professor@instituicao.edu.br";
-let PROFESSOR_PASSWORD = "senha123";
+import { Lock, User, Plus, Minus, ShoppingCart, History, Settings, LogOut, LogIn, CreditCard, Key, Mail, Users, Trophy, Crown, Gift, Wallet, PiggyBank, Cloud, Shield, Edit, AlertTriangle, CheckCircle, XCircle, Clock, Save, Trash2, DollarSign, FolderPlus, Folder, ChevronUp, ChevronDown, Maximize2, UserMinus, FolderMinus, FileText, UserPlus, AlertCircle } from 'lucide-react';
 
 // Initial student data
 const initialStudents = Array.from({ length: 32 }, (_, i) => ({
   id: i + 1,
   name: `Aluno ${i + 1}`,
-  nickname: `Aluno ${i + 1}`, // Nickname field
+  nickname: `Aluno ${i + 1}`,
   email: `aluno${i + 1}@instituicao.edu.br`,
   password: `senha${i + 1}`,
   balance: 1000,
   purchases: [],
   pendingRequests: [],
-  classId: 'geral' // Default class
+  classId: 'geral'
 }));
 
 const initialMenuItems = [
@@ -27,12 +23,14 @@ const initialMenuItems = [
   { id: 6, name: 'Bolo da Marge', price: 60, category: 'Sobremesas' }
 ];
 
-// Initial classes
 const initialClasses = [
   { id: 'geral', name: 'Turma Geral', studentCount: 32 }
 ];
 
-// Sr. Burns SVG Component
+const GOOGLE_DOMAINS = ['prof.educacao.sp.gov.br', 'gmail.com'];
+const MICROSOFT_DOMAINS = ['professor.educacao.sp.gov.br', 'portalsesisp.org.br'];
+const ALLOWED_DOMAINS = [...GOOGLE_DOMAINS, ...MICROSOFT_DOMAINS];
+
 const MrBurnsIcon = () => (
   <svg viewBox="0 0 100 100" className="w-16 h-16">
     <ellipse cx="50" cy="35" rx="25" ry="20" fill="#f8f8f8" stroke="#000" strokeWidth="2"/>
@@ -59,35 +57,32 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [userType, setUserType] = useState('student');
   const [newStudentEmail, setNewStudentEmail] = useState('');
-  const [newStudentNickname, setNewStudentNickname] = useState(''); // New nickname field
+  const [newStudentNickname, setNewStudentNickname] = useState('');
   const [resetStudentEmail, setResetStudentEmail] = useState('');
   const [selectedClass, setSelectedClass] = useState('geral');
-  
   const [showAccountSettings, setShowAccountSettings] = useState(false);
-  const [newProfessorEmail, setNewProfessorEmail] = useState(PROFESSOR_EMAIL);
-  const [currentPassword, setCurrentPassword] = useState('');
+  const [newProfessorEmail, setNewProfessorEmail] = useState('');
   const [newProfessorPassword, setNewProfessorPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [accountSettingsError, setAccountSettingsError] = useState('');
   const [accountSettingsSuccess, setAccountSettingsSuccess] = useState('');
-  
   const [showSavedIcon, setShowSavedIcon] = useState(false);
   const [debitStudentId, setDebitStudentId] = useState('');
   const [debitItemId, setDebitItemId] = useState('');
   const [debitDescription, setDebitDescription] = useState('');
-  
-  // Credit direct management
   const [creditStudentId, setCreditStudentId] = useState('');
   const [creditAmount, setCreditAmount] = useState('');
   const [creditDescription, setCreditDescription] = useState('');
-  
-  // New class management state
   const [newClassName, setNewClassName] = useState('');
   const [studentClassId, setStudentClassId] = useState('geral');
-
-  // Scroll control for students list
+  const [showRegister, setShowRegister] = useState(false);
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
+  const [registerError, setRegisterError] = useState('');
   const studentsListRef = useRef(null);
   const [showScrollControls, setShowScrollControls] = useState(false);
+  const [savedData, setSavedData] = useState(null);
 
   useEffect(() => {
     if (showSavedIcon) {
@@ -96,7 +91,6 @@ export default function App() {
     }
   }, [showSavedIcon]);
 
-  // Check if scroll is needed and show controls
   useEffect(() => {
     const checkScroll = () => {
       if (studentsListRef.current) {
@@ -104,25 +98,119 @@ export default function App() {
         setShowScrollControls(scrollHeight > clientHeight);
       }
     };
-    
     checkScroll();
     window.addEventListener('resize', checkScroll);
     return () => window.removeEventListener('resize', checkScroll);
   }, [students]);
 
+  const saveData = () => {
+    const dataToSave = {
+      professor: currentUser?.type === 'professor' ? { email: currentUser.email } : null,
+      students,
+      menuItems,
+      classes,
+      lastSaved: new Date().toISOString()
+    };
+
+    const dataStr = JSON.stringify(dataToSave, null, 2);
+    const dataUri = 'application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const link = document.createElement('a');
+    link.setAttribute('href', dataUri);
+    link.setAttribute('download', 'ligra_bank_data.json');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setShowSavedIcon(true);
+  };
+
+  const loadSavedData = (data) => {
+    if (data.students) setStudents(data.students);
+    if (data.menuItems) setMenuItems(data.menuItems);
+    if (data.classes) setClasses(data.classes);
+    setSavedData(data);
+  };
+
+  const handleRegisterProfessor = () => {
+    const email = registerEmail.trim().toLowerCase();
+    const password = registerPassword;
+    const confirm = registerConfirmPassword;
+
+    const domain = email.split('@')[1];
+    if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
+      setRegisterError('E-mail institucional inválido. Use um dos domínios permitidos.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setRegisterError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    if (password !== confirm) {
+      setRegisterError('As senhas não conferem.');
+      return;
+    }
+
+    const initialData = {
+      professor: { email, password },
+      students: initialStudents,
+      menuItems: initialMenuItems,
+      classes: initialClasses
+    };
+
+    loadSavedData(initialData);
+    setCurrentUser({ email, type: 'professor' });
+    setCurrentView('admin');
+    setShowRegister(false);
+    setRegisterError('');
+  };
+
   const handleLogin = () => {
+    const email = loginEmail.trim().toLowerCase();
+    const password = loginPassword;
+
+    if (!email || !password) {
+      setLoginError('Preencha todos os campos.');
+      return;
+    }
+
+    const domain = email.split('@')[1];
+    if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
+      if (userType === 'professor') {
+        setLoginError('Domínio não autorizado para professores.');
+      } else {
+        // Alunos podem ter qualquer domínio
+        const student = students.find(s =>
+          s.email.toLowerCase() === email && s.password === password
+        );
+        if (student) {
+          setCurrentUser(student);
+          setCurrentView('dashboard');
+          setLoginError('');
+        } else {
+          setLoginError('Email ou senha incorretos');
+        }
+      }
+      return;
+    }
+
     if (userType === 'professor') {
-      if (loginEmail === PROFESSOR_EMAIL && loginPassword === PROFESSOR_PASSWORD) {
-        setCurrentUser({ email: PROFESSOR_EMAIL, type: 'professor' });
+      if (!savedData) {
+        setLoginError('Primeiro acesso: use o botão "Cadastrar Professor".');
+        return;
+      }
+      if (savedData.professor.email === email && savedData.professor.password === password) {
+        setCurrentUser({ email, type: 'professor' });
         setCurrentView('admin');
         setLoginError('');
+        loadSavedData(savedData);
       } else {
-        setLoginError('Credenciais do professor inválidas');
+        setLoginError('Credenciais inválidas.');
       }
     } else {
-      const student = students.find(s => 
-        s.email.toLowerCase() === loginEmail.toLowerCase() && 
-        s.password === loginPassword
+      const student = students.find(s =>
+        s.email.toLowerCase() === email && s.password === password
       );
       if (student) {
         setCurrentUser(student);
@@ -145,10 +233,6 @@ export default function App() {
     setAccountSettingsSuccess('');
   };
 
-  const saveData = () => {
-    setShowSavedIcon(true);
-  };
-
   const requestCredit = (amount) => {
     if (currentUser && amount > 0) {
       const newRequest = {
@@ -158,13 +242,11 @@ export default function App() {
         status: 'pending',
         date: new Date().toLocaleString()
       };
-      
       const updatedStudents = students.map(student =>
         student.id === currentUser.id
           ? { ...student, pendingRequests: [...student.pendingRequests, newRequest] }
           : student
       );
-      
       setStudents(updatedStudents);
       setCurrentUser({ ...currentUser, pendingRequests: [...currentUser.pendingRequests, newRequest] });
       saveData();
@@ -173,10 +255,8 @@ export default function App() {
 
   const requestPurchase = (itemId) => {
     if (!currentUser || currentUser.type === 'professor') return;
-    
     const item = menuItems.find(i => i.id === itemId);
     if (!item) return;
-
     const newRequest = {
       id: Date.now(),
       type: 'purchase',
@@ -186,13 +266,11 @@ export default function App() {
       status: 'pending',
       date: new Date().toLocaleString()
     };
-    
     const updatedStudents = students.map(student =>
       student.id === currentUser.id
         ? { ...student, pendingRequests: [...student.pendingRequests, newRequest] }
         : student
     );
-    
     setStudents(updatedStudents);
     setCurrentUser({ ...currentUser, pendingRequests: [...currentUser.pendingRequests, newRequest] });
     saveData();
@@ -204,11 +282,9 @@ export default function App() {
         const updatedRequests = student.pendingRequests.map(req => 
           req.id === requestId ? { ...req, status: 'approved' } : req
         );
-        
         const approvedRequest = student.pendingRequests.find(req => req.id === requestId);
         let newBalance = student.balance;
         let newPurchases = [...student.purchases];
-        
         if (approvedRequest.type === 'credit') {
           newBalance += approvedRequest.amount;
         } else if (approvedRequest.type === 'purchase') {
@@ -223,7 +299,6 @@ export default function App() {
             });
           }
         }
-        
         return {
           ...student,
           balance: newBalance,
@@ -233,9 +308,7 @@ export default function App() {
       }
       return student;
     });
-    
     setStudents(updatedStudents);
-    
     if (currentUser && currentUser.id === studentId) {
       const updatedCurrentUser = updatedStudents.find(s => s.id === studentId);
       setCurrentUser(updatedCurrentUser);
@@ -253,9 +326,7 @@ export default function App() {
       }
       return student;
     });
-    
     setStudents(updatedStudents);
-    
     if (currentUser && currentUser.id === studentId) {
       const updatedCurrentUser = updatedStudents.find(s => s.id === studentId);
       setCurrentUser(updatedCurrentUser);
@@ -268,18 +339,14 @@ export default function App() {
       alert('Por favor, preencha todos os campos, incluindo a descrição.');
       return;
     }
-    
     const studentIndex = students.findIndex(s => s.id.toString() === debitStudentId);
     const item = menuItems.find(i => i.id.toString() === debitItemId);
-    
     if (studentIndex === -1 || !item) return;
-    
     const student = students[studentIndex];
     if (student.balance < item.price) {
       alert('Saldo insuficiente!');
       return;
     }
-    
     const newPurchase = {
       id: Date.now(),
       itemId: item.id,
@@ -289,14 +356,12 @@ export default function App() {
       debitedByProfessor: true,
       description: debitDescription
     };
-    
     const updatedStudents = [...students];
     updatedStudents[studentIndex] = {
       ...student,
       balance: student.balance - item.price,
       purchases: [...student.purchases, newPurchase]
     };
-    
     setStudents(updatedStudents);
     setDebitStudentId('');
     setDebitItemId('');
@@ -304,22 +369,18 @@ export default function App() {
     saveData();
   };
 
-  // Direct credit function
   const creditStudentDirect = () => {
     if (!creditStudentId || !creditAmount || !creditDescription.trim()) {
       alert('Por favor, preencha todos os campos, incluindo a descrição.');
       return;
     }
-    
     const amount = parseFloat(creditAmount);
     if (isNaN(amount) || amount <= 0) {
       alert('Valor de crédito inválido.');
       return;
     }
-    
     const studentIndex = students.findIndex(s => s.id.toString() === creditStudentId);
     if (studentIndex === -1) return;
-    
     const student = students[studentIndex];
     const newCreditRecord = {
       id: Date.now(),
@@ -329,14 +390,12 @@ export default function App() {
       creditedByProfessor: true,
       description: creditDescription
     };
-    
     const updatedStudents = [...students];
     updatedStudents[studentIndex] = {
       ...student,
       balance: student.balance + amount,
       purchases: [...student.purchases, newCreditRecord]
     };
-    
     setStudents(updatedStudents);
     setCreditStudentId('');
     setCreditAmount('');
@@ -374,44 +433,34 @@ export default function App() {
         balance: 1000,
         purchases: [],
         pendingRequests: [],
-        classId: studentClassId // Assign to selected class
+        classId: studentClassId
       };
-      
       const updatedStudents = [newStudent, ...students];
       setStudents(updatedStudents);
-      
-      // Update class count
       const updatedClasses = classes.map(cls => 
         cls.id === studentClassId 
           ? { ...cls, studentCount: cls.studentCount + 1 }
           : cls
       );
       setClasses(updatedClasses);
-      
       setNewStudentEmail('');
       setNewStudentNickname('');
       saveData();
     }
   };
 
-  // Delete student function
   const deleteStudent = (studentId) => {
     if (window.confirm('Tem certeza que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
       const studentToDelete = students.find(s => s.id === studentId);
       if (!studentToDelete) return;
-      
-      // Remove student from students list
       const updatedStudents = students.filter(s => s.id !== studentId);
       setStudents(updatedStudents);
-      
-      // Update class count
       const updatedClasses = classes.map(cls => 
         cls.id === studentToDelete.classId 
           ? { ...cls, studentCount: Math.max(0, cls.studentCount - 1) }
           : cls
       );
       setClasses(updatedClasses);
-      
       saveData();
     }
   };
@@ -444,30 +493,23 @@ export default function App() {
     }
   };
 
-  // Delete class function
   const deleteClass = (classId) => {
     if (classId === 'geral') {
       alert('Não é possível excluir a turma geral.');
       return;
     }
-    
     const classToDelete = classes.find(c => c.id === classId);
     if (!classToDelete) return;
-    
     if (classToDelete.studentCount > 0) {
       if (!window.confirm(`A turma "${classToDelete.name}" contém ${classToDelete.studentCount} alunos. Deseja realmente excluí-la? Todos os alunos serão movidos para a turma geral.`)) {
         return;
       }
-      
-      // Move students to general class
       const updatedStudents = students.map(student => 
         student.classId === classId 
           ? { ...student, classId: 'geral' }
           : student
       );
       setStudents(updatedStudents);
-      
-      // Update general class count
       const updatedClasses = classes
         .filter(c => c.id !== classId)
         .map(cls => 
@@ -477,52 +519,48 @@ export default function App() {
         );
       setClasses(updatedClasses);
     } else {
-      // Just delete the empty class
       const updatedClasses = classes.filter(c => c.id !== classId);
       setClasses(updatedClasses);
     }
-    
-    // Reset selected class if it was the deleted one
     if (selectedClass === classId) {
       setSelectedClass('geral');
     }
-    
     saveData();
   };
 
   const updateProfessorAccount = () => {
     setAccountSettingsError('');
     setAccountSettingsSuccess('');
-    
-    if (currentPassword !== PROFESSOR_PASSWORD) {
+    if (!savedData || currentPassword !== savedData.professor.password) {
       setAccountSettingsError('Senha atual incorreta');
       return;
     }
-    
     if (!newProfessorEmail || !newProfessorEmail.includes('@')) {
       setAccountSettingsError('Email inválido');
       return;
     }
-    
+    const domain = newProfessorEmail.split('@')[1];
+    if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
+      setAccountSettingsError('Domínio não autorizado para professores.');
+      return;
+    }
     if (newProfessorPassword && newProfessorPassword !== confirmNewPassword) {
       setAccountSettingsError('As novas senhas não correspondem');
       return;
     }
-    
-    PROFESSOR_EMAIL = newProfessorEmail;
-    if (newProfessorPassword) {
-      PROFESSOR_PASSWORD = newProfessorPassword;
-    }
-    
+    const updatedData = {
+      ...savedData,
+      professor: {
+        email: newProfessorEmail,
+        password: newProfessorPassword || savedData.professor.password
+      }
+    };
+    loadSavedData(updatedData);
+    setCurrentUser({ email: newProfessorEmail, type: 'professor' });
     setAccountSettingsSuccess('Credenciais atualizadas com sucesso!');
-    
-    if (currentUser && currentUser.type === 'professor') {
-      setCurrentUser({ email: PROFESSOR_EMAIL, type: 'professor' });
-    }
     saveData();
   };
 
-  // Scroll functions for students list
   const scrollStudentsUp = () => {
     if (studentsListRef.current) {
       studentsListRef.current.scrollBy({ top: -100, behavior: 'smooth' });
@@ -581,77 +619,121 @@ export default function App() {
             <h1 className="text-xl font-bold text-green-800 mb-1">Bem-vindo ao Ligra Bank!</h1>
             <p className="text-black text-sm">Sistema de economia virtual - Escola de Springfield</p>
           </div>
-          
-          <div className="flex mb-3 bg-yellow-200 rounded p-0.5">
-            <button
-              onClick={() => setUserType('student')}
-              className={`flex-1 py-1.5 px-3 rounded text-xs ${userType === 'student' ? 'bg-blue-600 text-white' : 'text-black'}`}
-            >
-              Aluno
-            </button>
-            <button
-              onClick={() => setUserType('professor')}
-              className={`flex-1 py-1.5 px-3 rounded text-xs ${userType === 'professor' ? 'bg-purple-600 text-white' : 'text-black'}`}
-            >
-              Professor
-            </button>
-          </div>
-          
-          <div className="mb-3">
-            <label className="block text-black mb-1 text-xs" htmlFor="email">Email</label>
-            <div className="relative">
-              <Mail className="absolute left-2 top-2 text-gray-600" size={16} />
+          {showRegister ? (
+            <div>
+              <h2 className="text-lg font-bold text-purple-800 mb-3 text-center">Cadastrar Professor</h2>
               <input
-                id="email"
                 type="email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 focus:border-black focus:outline-none text-sm"
-                placeholder={userType === 'student' ? 'aluno@instituicao.edu.br' : 'professor@instituicao.edu.br'}
+                value={registerEmail}
+                onChange={(e) => setRegisterEmail(e.target.value)}
+                placeholder="Seu e-mail institucional"
+                className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-sm mb-2"
               />
-            </div>
-          </div>
-          
-          <div className="mb-3">
-            <label className="block text-black mb-1 text-xs" htmlFor="password">Senha</label>
-            <div className="relative">
-              <Key className="absolute left-2 top-2 text-gray-600" size={16} />
               <input
-                id="password"
                 type="password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 focus:border-black focus:outline-none text-sm"
-                placeholder="Digite sua senha"
+                value={registerPassword}
+                onChange={(e) => setRegisterPassword(e.target.value)}
+                placeholder="Senha (mín. 6 caracteres)"
+                className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-sm mb-2"
               />
+              <input
+                type="password"
+                value={registerConfirmPassword}
+                onChange={(e) => setRegisterConfirmPassword(e.target.value)}
+                placeholder="Confirme a senha"
+                className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-sm mb-2"
+              />
+              {registerError && (
+                <div className="mb-2 p-1.5 bg-red-200 border-2 border-red-500 text-red-800 rounded text-xs">
+                  {registerError}
+                </div>
+              )}
+              <StyledButton onClick={handleRegisterProfessor} className="w-full mb-2">
+                Cadastrar
+              </StyledButton>
+              <button
+                onClick={() => setShowRegister(false)}
+                className="text-blue-700 underline text-sm block text-center"
+              >
+                ← Voltar para login
+              </button>
             </div>
-          </div>
-          
-          {loginError && (
-            <div className="mb-3 p-1.5 bg-red-200 border-2 border-red-500 text-red-800 rounded text-xs">
-              {loginError}
-            </div>
-          )}
-          
-          <StyledButton onClick={handleLogin} className="w-full mb-3">
-            <LogIn className="inline mr-1" size={16} />
-            Entrar
-          </StyledButton>
-          
-          {userType === 'student' && (
-            <div className="text-center text-xs text-blue-800">
-              {"Senha padrão: senha{número do aluno}"}
-            </div>
+          ) : (
+            <>
+              <div className="flex mb-3 bg-yellow-200 rounded p-0.5">
+                <button
+                  onClick={() => setUserType('student')}
+                  className={`flex-1 py-1.5 px-3 rounded text-xs ${userType === 'student' ? 'bg-blue-600 text-white' : 'text-black'}`}
+                >
+                  Aluno
+                </button>
+                <button
+                  onClick={() => setUserType('professor')}
+                  className={`flex-1 py-1.5 px-3 rounded text-xs ${userType === 'professor' ? 'bg-purple-600 text-white' : 'text-black'}`}
+                >
+                  Professor
+                </button>
+              </div>
+              <div className="mb-3">
+                <label className="block text-black mb-1 text-xs" htmlFor="email">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-2 top-2 text-gray-600" size={16} />
+                  <input
+                    id="email"
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 focus:border-black focus:outline-none text-sm"
+                    placeholder={userType === 'student' ? 'aluno@instituicao.edu.br' : 'professor@instituicao.edu.br'}
+                  />
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="block text-black mb-1 text-xs" htmlFor="password">Senha</label>
+                <div className="relative">
+                  <Key className="absolute left-2 top-2 text-gray-600" size={16} />
+                  <input
+                    id="password"
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 focus:border-black focus:outline-none text-sm"
+                    placeholder="Digite sua senha"
+                  />
+                </div>
+              </div>
+              {loginError && (
+                <div className="mb-3 p-1.5 bg-red-200 border-2 border-red-500 text-red-800 rounded text-xs">
+                  {loginError}
+                </div>
+              )}
+              <StyledButton onClick={handleLogin} className="w-full mb-3">
+                <LogIn className="inline mr-1" size={16} />
+                Entrar
+              </StyledButton>
+              {userType === 'professor' && (
+                <button
+                  onClick={() => setShowRegister(true)}
+                  className="text-purple-700 font-bold flex items-center gap-1 text-sm justify-center"
+                >
+                  <UserPlus size={14} />
+                  Primeiro acesso? Cadastre-se
+                </button>
+              )}
+              {userType === 'student' && (
+                <div className="text-center text-xs text-blue-800">
+                  {"Senha padrão: senha{número do aluno}"}
+                </div>
+              )}
+            </>
           )}
         </div>
-        
         {showSavedIcon && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded border-2 border-green-700 z-50 flex items-center">
             <Save className="mr-1" size={16} />
             Dados salvos!
           </div>
         )}
-        
         <div className="absolute top-8 right-8">
           <MrBurnsIcon />
         </div>
@@ -685,7 +767,6 @@ export default function App() {
               </StyledButton>
             </div>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
               <div className="bg-yellow-100 border-4 border-green-600 rounded-lg p-3 relative">
@@ -714,7 +795,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
             <div className="space-y-4">
               <div className="bg-yellow-100 border-4 border-blue-600 rounded-lg p-3 relative">
                 <div className="absolute top-2 right-2">
@@ -740,7 +820,6 @@ export default function App() {
                   Aguardando aprovação do professor
                 </div>
               </div>
-
               <div className="bg-yellow-100 border-4 border-purple-600 rounded-lg p-3 relative">
                 <div className="absolute top-2 right-2">
                   <History className="text-purple-800" size={20} />
@@ -764,7 +843,6 @@ export default function App() {
                     ))
                   )}
                 </div>
-                
                 <div className="mt-2">
                   <h3 className="font-bold text-yellow-800 text-xs mb-1">Solicitações Pendentes</h3>
                   <div className="max-h-32 overflow-y-auto">
@@ -793,7 +871,6 @@ export default function App() {
             </div>
           </div>
         </div>
-        
         {showSavedIcon && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded border-2 border-green-700 z-50 flex items-center">
             <Save className="mr-1" size={16} />
@@ -810,12 +887,9 @@ export default function App() {
         .filter(req => req.status === 'pending')
         .map(req => ({ ...req, studentId: student.id, studentName: student.nickname, studentEmail: student.email }))
     );
-
-    // Filter students by selected class
     const filteredStudents = selectedClass === 'all' 
       ? students 
       : students.filter(s => s.classId === selectedClass);
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 p-4 relative overflow-hidden" style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>
         <div className="max-w-6xl mx-auto relative z-10">
@@ -828,7 +902,6 @@ export default function App() {
                 <h1 className="text-lg font-bold text-purple-800">Ligra Bank - Painel do Professor</h1>
                 <p className="text-black text-sm">Miss. Teacher.</p>
               </div>
-              
               <StyledButton 
                 onClick={() => setShowAccountSettings(!showAccountSettings)} 
                 variant="admin"
@@ -837,21 +910,18 @@ export default function App() {
                 <Shield className="mr-0.5" size={14} />
                 Minha Conta
               </StyledButton>
-              
               <StyledButton onClick={handleLogout} variant="danger" className="text-xs">
                 <LogOut className="inline mr-0.5" size={14} />
                 Sair
               </StyledButton>
             </div>
           </div>
-
           {showAccountSettings && (
             <div className="bg-yellow-100 border-4 border-cyan-600 rounded-lg p-4 mb-4 relative">
               <div className="flex items-center mb-2">
                 <Edit className="mr-1 text-cyan-800" size={20} />
                 <h2 className="text-base font-bold text-cyan-800">Configurações da Conta</h2>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-yellow-50 p-2.5 rounded border border-gray-400">
                   <div className="flex items-center mb-1">
@@ -862,7 +932,6 @@ export default function App() {
                     Dados salvos automaticamente no OneDrive.
                   </p>
                 </div>
-                
                 <div className="space-y-2">
                   <div>
                     <label className="block text-black mb-1 text-xs" htmlFor="newEmail">Novo Email</label>
@@ -875,7 +944,6 @@ export default function App() {
                       placeholder="Novo email institucional"
                     />
                   </div>
-                  
                   <div>
                     <label className="block text-black mb-1 text-xs" htmlFor="currentPassword">Senha Atual</label>
                     <input
@@ -887,7 +955,6 @@ export default function App() {
                       placeholder="Digite sua senha atual"
                     />
                   </div>
-                  
                   <div>
                     <label className="block text-black mb-1 text-xs" htmlFor="newPassword">Nova Senha</label>
                     <input
@@ -899,7 +966,6 @@ export default function App() {
                       placeholder="Deixe em branco para manter"
                     />
                   </div>
-                  
                   <div>
                     <label className="block text-black mb-1 text-xs" htmlFor="confirmPassword">Confirmar Nova Senha</label>
                     <input
@@ -911,19 +977,16 @@ export default function App() {
                       placeholder="Confirme a nova senha"
                     />
                   </div>
-                  
                   {accountSettingsError && (
                     <div className="p-1.5 bg-red-200 border-2 border-red-500 text-red-800 rounded text-xs">
                       {accountSettingsError}
                     </div>
                   )}
-                  
                   {accountSettingsSuccess && (
                     <div className="p-1.5 bg-green-200 border-2 border-green-500 text-green-800 rounded text-xs">
                       {accountSettingsSuccess}
                     </div>
                   )}
-                  
                   <StyledButton 
                     onClick={updateProfessorAccount} 
                     variant="success" 
@@ -935,8 +998,6 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {/* Class Management */}
           <div className="bg-yellow-100 border-4 border-purple-600 rounded-lg p-3 mb-4">
             <div className="flex items-center mb-2">
               <FolderPlus className="mr-1 text-purple-800" size={20} />
@@ -985,8 +1046,6 @@ export default function App() {
               ))}
             </div>
           </div>
-
-          {/* Direct Credit Section */}
           <div className="bg-yellow-100 border-4 border-green-600 rounded-lg p-3 mb-4">
             <div className="flex items-center mb-2">
               <DollarSign className="mr-1 text-green-800" size={20} />
@@ -1005,7 +1064,6 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              
               <input
                 type="number"
                 placeholder="Valor do crédito"
@@ -1014,7 +1072,6 @@ export default function App() {
                 className="p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black text-xs"
                 min="1"
               />
-              
               <input
                 type="text"
                 placeholder="Descrição do crédito"
@@ -1022,7 +1079,6 @@ export default function App() {
                 onChange={(e) => setCreditDescription(e.target.value)}
                 className="p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black text-xs"
               />
-              
               <StyledButton
                 onClick={creditStudentDirect}
                 variant="success"
@@ -1033,8 +1089,6 @@ export default function App() {
               </StyledButton>
             </div>
           </div>
-
-          {/* Direct Debit Section */}
           <div className="bg-yellow-100 border-4 border-red-600 rounded-lg p-3 mb-4">
             <div className="flex items-center mb-2">
               <DollarSign className="mr-1 text-red-800" size={20} />
@@ -1053,7 +1107,6 @@ export default function App() {
                   </option>
                 ))}
               </select>
-              
               <select
                 value={debitItemId}
                 onChange={(e) => setDebitItemId(e.target.value)}
@@ -1064,7 +1117,6 @@ export default function App() {
                   <option key={item.id} value={item.id}>{item.name} (L$ {item.price})</option>
                 ))}
               </select>
-              
               <input
                 type="text"
                 placeholder="Descrição do débito"
@@ -1072,7 +1124,6 @@ export default function App() {
                 onChange={(e) => setDebitDescription(e.target.value)}
                 className="p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black text-xs"
               />
-              
               <StyledButton
                 onClick={debitStudentItem}
                 variant="danger"
@@ -1083,7 +1134,6 @@ export default function App() {
               </StyledButton>
             </div>
           </div>
-
           {allPendingRequests.length > 0 && (
             <div className="bg-yellow-100 border-4 border-orange-600 rounded-lg p-3 mb-4">
               <div className="flex items-center mb-2">
@@ -1130,14 +1180,12 @@ export default function App() {
               </div>
             </div>
           )}
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
             <div className="bg-yellow-100 border-4 border-green-600 rounded-lg p-3">
               <div className="flex items-center mb-2">
                 <Users className="mr-1 text-green-800" size={20} />
                 <h2 className="text-base font-bold text-green-800">Gerenciar Alunos</h2>
               </div>
-              
               <div className="mb-2">
                 <h3 className="font-bold text-black mb-1 text-xs">Adicionar Aluno</h3>
                 <div className="flex gap-1">
@@ -1169,7 +1217,6 @@ export default function App() {
                   </StyledButton>
                 </div>
               </div>
-              
               <div>
                 <h3 className="font-bold text-black mb-1 text-xs">Redefinir Senha</h3>
                 <div className="flex gap-1">
@@ -1189,7 +1236,6 @@ export default function App() {
                 </p>
               </div>
             </div>
-
             <div className="bg-yellow-100 border-4 border-blue-600 rounded-lg p-3 relative">
               <div className="flex items-center mb-2">
                 <User className="mr-1 text-blue-800" size={20} />
@@ -1229,8 +1275,6 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              
-              {/* Scroll control buttons */}
               {showScrollControls && (
                 <div className="absolute right-1 bottom-1 flex flex-col space-y-1">
                   <StyledButton
@@ -1269,13 +1313,11 @@ export default function App() {
               )}
             </div>
           </div>
-
           <div className="bg-yellow-100 border-4 border-red-600 rounded-lg p-3">
             <div className="flex items-center mb-2">
               <Settings className="mr-1 text-red-800" size={20} />
               <h2 className="text-base font-bold text-red-800">Cardápio de Produtos</h2>
             </div>
-            
             <div className="mb-2 p-2 bg-yellow-50 rounded">
               <h3 className="font-bold text-black mb-1 text-xs">Adicionar Item</h3>
               <div className="grid grid-cols-3 gap-1">
@@ -1305,7 +1347,6 @@ export default function App() {
                 Adicionar Item
               </StyledButton>
             </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
               {menuItems.map(item => (
                 <div key={item.id} className="bg-yellow-50 border-2 border-gray-400 rounded p-2">
@@ -1329,7 +1370,6 @@ export default function App() {
             </div>
           </div>
         </div>
-        
         {showSavedIcon && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-3 py-1.5 rounded border-2 border-green-700 z-50 flex items-center">
             <Save className="mr-1" size={16} />
