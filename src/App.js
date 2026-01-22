@@ -27,9 +27,8 @@ const initialClasses = [
   { id: 'geral', name: 'Turma Geral', studentCount: 32 }
 ];
 
-const GOOGLE_DOMAINS = ['prof.educacao.sp.gov.br', 'gmail.com'];
 const MICROSOFT_DOMAINS = ['professor.educacao.sp.gov.br', 'portalsesisp.org.br'];
-const ALLOWED_DOMAINS = [...GOOGLE_DOMAINS, ...MICROSOFT_DOMAINS];
+const ALLOWED_DOMAINS = [...MICROSOFT_DOMAINS];
 
 const MrBurnsIcon = () => (
   <svg viewBox="0 0 100 100" className="w-16 h-16">
@@ -138,7 +137,7 @@ export default function App() {
 
     const domain = email.split('@')[1];
     if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
-      setRegisterError('E-mail institucional inválido. Use um dos domínios permitidos.');
+      setRegisterError('E-mail institucional inválido. Use um dos domínios Microsoft permitidos.');
       return;
     }
 
@@ -178,9 +177,9 @@ export default function App() {
     const domain = email.split('@')[1];
     if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
       if (userType === 'professor') {
-        setLoginError('Domínio não autorizado para professores.');
+        setLoginError('Domínio não autorizado para professores. Use um domínio Microsoft permitido.');
       } else {
-        // Alunos podem ter qualquer domínio
+        // Alunos podem ter qualquer domínio (professores criam logins para eles)
         const student = students.find(s =>
           s.email.toLowerCase() === email && s.password === password
         );
@@ -541,7 +540,7 @@ export default function App() {
     }
     const domain = newProfessorEmail.split('@')[1];
     if (!domain || !ALLOWED_DOMAINS.includes(domain)) {
-      setAccountSettingsError('Domínio não autorizado para professores.');
+      setAccountSettingsError('Domínio Microsoft não autorizado para professores.');
       return;
     }
     if (newProfessorPassword && newProfessorPassword !== confirmNewPassword) {
@@ -626,7 +625,7 @@ export default function App() {
                 type="email"
                 value={registerEmail}
                 onChange={(e) => setRegisterEmail(e.target.value)}
-                placeholder="Seu e-mail institucional"
+                placeholder="Seu e-mail Microsoft institucional"
                 className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-sm mb-2"
               />
               <input
@@ -684,7 +683,7 @@ export default function App() {
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full pl-8 pr-3 py-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 focus:border-black focus:outline-none text-sm"
-                    placeholder={userType === 'student' ? 'aluno@instituicao.edu.br' : 'professor@instituicao.edu.br'}
+                    placeholder={userType === 'student' ? 'aluno@instituicao.edu.br' : 'professor@instituicao.edu.br (Microsoft)'}
                   />
                 </div>
               </div>
@@ -717,12 +716,12 @@ export default function App() {
                   className="text-purple-700 font-bold flex items-center gap-1 text-sm justify-center"
                 >
                   <UserPlus size={14} />
-                  Primeiro acesso? Cadastre-se
+                  Primeiro acesso? Cadastre-se (Microsoft)
                 </button>
               )}
               {userType === 'student' && (
                 <div className="text-center text-xs text-blue-800">
-                  {"Senha padrão: senha{número do aluno}"}
+                  {"Senha padrão: senha{número do aluno} (ou a definida pelo professor)"}
                 </div>
               )}
             </>
@@ -1191,7 +1190,7 @@ export default function App() {
                 <div className="flex gap-1">
                   <input
                     type="email"
-                    placeholder="Email do novo aluno"
+                    placeholder="Email do novo aluno (gerado pelo professor)"
                     value={newStudentEmail}
                     onChange={(e) => setNewStudentEmail(e.target.value)}
                     className="flex-1 p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-xs"
@@ -1222,7 +1221,7 @@ export default function App() {
                 <div className="flex gap-1">
                   <input
                     type="email"
-                    placeholder="Email do aluno"
+                    placeholder="Email do aluno (gerado pelo professor)"
                     value={resetStudentEmail}
                     onChange={(e) => setResetStudentEmail(e.target.value)}
                     className="flex-1 p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black placeholder-gray-600 text-xs"

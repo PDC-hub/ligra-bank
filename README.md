@@ -11,9 +11,9 @@ Feito com ❤️ por **Rafael (Rafão)**, professor de Ciências da Natureza, Bi
 ## 🌟 Funcionalidades
 
 ### 👩‍🏫 Para Professores (Miss. Teacher)
-- ✅ **Login seguro** com credenciais personalizáveis  
+- ✅ **Login seguro** com credenciais Microsoft institucionais  
 - 👥 **Gerenciamento de turmas**: criar, visualizar e excluir  
-- 👤 **Cadastro e exclusão de alunos** com e-mail e apelido  
+- 👤 **Cadastro e exclusão de alunos** com e-mail e apelido (gerados por professores)  
 - 💰 **Adição direta de créditos** com descrição detalhada  
 - 🛒 **Débito direto de produtos** do cardápio  
 - 📋 **Aprovação ou rejeição de solicitações** (compras e créditos)  
@@ -35,18 +35,25 @@ Feito com ❤️ por **Rafael (Rafão)**, professor de Ciências da Natureza, Bi
 
 ---
 
-## 🚀 Demonstração ao Vivo
+## 🚀 Como Executar
 
-[![Deploy with Vercel](https://vercel.com/button)](https://ligra-bank.vercel.app)
-
-> **Link ativo**: [https://ligra-bank.vercel.app](https://ligra-bank.vercel.app)  
-> *(Substitua este link pelo seu após o deploy no Vercel!)*
+1. Clone o repositório
+2. Instale as dependências com `npm install`
+3. Execute com `npm start`
 
 ---
 
-## 🛠️ Como Rodar Localmente
+## ⚙️ Configurações de Autenticação
 
-1. **Clone o repositório**
-   ```bash
-   git clone https://github.com/seu-usuario/ligra-bank.git
-   cd ligra-bank
+- **Professores**: Devem usar e-mails institucionais Microsoft (`@professor.educacao.sp.gov.br` ou `@portalsesisp.org.br`)
+- **Alunos**: Podem ter e-mails personalizados gerados pelos professores
+- Sistema permite alternância entre perfis de aluno e professor
+- Botões de escolha de perfil aluno/professor disponíveis na tela de login
+
+---
+
+## 📝 Notas sobre o Desenvolvimento
+
+O sistema foi desenvolvido em React com Tailwind CSS, utilizando ícones do Lucide React. A interface temática de Os Simpsons com o Sr. Burns como personagem central cria um ambiente lúdico para o aprendizado financeiro.
+
+A persistência de dados é feita através de exportação/importação de arquivos JSON, permitindo armazenamento local ou em nuvem (como OneDrive).
