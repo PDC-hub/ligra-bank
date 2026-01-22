@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Lock, User, Plus, Minus, ShoppingCart, History, Settings, LogOut, LogIn, CreditCard, Key, Mail, Users, Trophy, Crown, Gift, Wallet, PiggyBank, Cloud, Shield, Edit, AlertTriangle, CheckCircle, XCircle, Clock, Save, Trash2, DollarSign, FolderPlus, Folder, ChevronUp, ChevronDown, Maximize2, UserMinus, FolderMinus, FileText, UserPlus, AlertCircle } from 'lucide-react';
 
 // Initial student data
@@ -609,6 +610,7 @@ export default function App() {
   if (currentView === 'login') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-200 via-orange-200 to-red-200 p-4 flex items-center justify-center relative overflow-hidden" style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>
+        <SpeedInsights />
         <div className="bg-yellow-100 border-4 border-black rounded-lg p-6 max-w-md w-full shadow-2xl relative z-10">
           <div className="text-center mb-4">
             <div className="inline-block bg-red-600 text-white px-3 py-1.5 rounded mb-3 relative">
@@ -743,6 +745,7 @@ export default function App() {
   if (currentView === 'dashboard' && currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 p-4 relative overflow-hidden" style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>
+        <SpeedInsights />
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="bg-yellow-100 border-4 border-black rounded-lg p-3 mb-4 relative">
             <div className="absolute top-2 right-2">
@@ -891,6 +894,7 @@ export default function App() {
       : students.filter(s => s.classId === selectedClass);
     return (
       <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-orange-100 to-red-100 p-4 relative overflow-hidden" style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', cursive" }}>
+        <SpeedInsights />
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="bg-yellow-100 border-4 border-black rounded-lg p-3 mb-4 relative">
             <div className="absolute top-2 right-2">
