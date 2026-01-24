@@ -82,6 +82,7 @@ export default function App() {
   const studentsListRef = useRef(null);
   const [showScrollControls, setShowScrollControls] = useState(false);
   const [savedData, setSavedData] = useState(null);
+  const [currentPassword, setCurrentPassword] = useState('');
 
   useEffect(() => {
     if (showSavedIcon) {
