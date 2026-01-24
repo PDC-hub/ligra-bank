@@ -101,6 +101,7 @@ export default function App() {
   const [newClassName, setNewClassName] = useState('');
   const [studentClassId, setStudentClassId] = useState('geral');
   const [showRegister, setShowRegister] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState([]);
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
@@ -609,6 +610,89 @@ export default function App() {
     if (studentsListRef.current) {
       studentsListRef.current.scrollTo({ top: studentsListRef.current.scrollHeight, behavior: 'smooth' });
     }
+  };
+
+  const toggleStudentSelection = (studentId) => {
+    setSelectedStudents(prev => 
+      prev.includes(studentId) 
+        ? prev.filter(id => id !== studentId) 
+        : [...prev, studentId]
+    );
+  };
+
+  const selectAllStudents = () => {
+    setSelectedStudents(filteredStudents.map(student => student.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedStudents([]);
+  };
+
+  const bulkDeleteSelectedStudents = () => {
+    if (selectedStudents.length === 0) return;
+    
+    if (window.confirm(`Tem certeza que deseja excluir ${selectedStudents.length} aluno(s)? Esta ação não pode ser desfeita.`)) {
+      const updatedStudents = students.filter(s => !selectedStudents.includes(s.id));
+      setStudents(updatedStudents);
+      
+      // Atualizar contagem de alunos nas turmas
+      const updatedClasses = [...classes];
+      selectedStudents.forEach(studentId => {
+        const studentToDelete = students.find(s => s.id === studentId);
+        if (studentToDelete) {
+          const classIndex = updatedClasses.findIndex(cls => cls.id === studentToDelete.classId);
+          if (classIndex !== -1) {
+            updatedClasses[classIndex] = {
+              ...updatedClasses[classIndex],
+              studentCount: Math.max(0, updatedClasses[classIndex].studentCount - 1)
+            };
+          }
+        }
+      });
+      setClasses(updatedClasses);
+      
+      setSelectedStudents([]);
+      saveData();
+    }
+  };
+
+  const openBulkCreditModal = () => {
+    if (selectedStudents.length === 0) {
+      alert('Selecione pelo menos um aluno para adicionar crédito.');
+      return;
+    }
+    // Abre um modal ou painel para inserir o valor de crédito
+    const amount = prompt('Digite o valor de crédito a ser adicionado para os alunos selecionados:');
+    if (amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0) {
+      const description = prompt('Digite uma descrição para esta operação:') || 'Crédito em massa';
+      applyBulkCredit(parseFloat(amount), description);
+    }
+  };
+
+  const applyBulkCredit = (amount, description) => {
+    const updatedStudents = students.map(student => {
+      if (selectedStudents.includes(student.id)) {
+        const newCreditRecord = {
+          id: Date.now() + Math.random(), // ID único
+          type: 'direct_credit',
+          amount: amount,
+          date: new Date().toLocaleString(),
+          creditedByProfessor: true,
+          description: description
+        };
+        
+        return {
+          ...student,
+          balance: student.balance + amount,
+          purchases: [...student.purchases, newCreditRecord]
+        };
+      }
+      return student;
+    });
+    
+    setStudents(updatedStudents);
+    setSelectedStudents([]);
+    saveData();
   };
 
   const StyledButton = ({ onClick, children, variant = 'primary', className = '', disabled = false }) => {
@@ -1263,22 +1347,66 @@ export default function App() {
               </div>
             </div>
             <div className="bg-yellow-100 border-4 border-blue-600 rounded-lg p-3 relative">
-              <div className="flex items-center mb-2">
-                <User className="mr-1 text-blue-800" size={20} />
-                <h2 className="text-base font-bold text-blue-800">Sala dos Alunos</h2>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center">
+                  <User className="mr-1 text-blue-800" size={20} />
+                  <h2 className="text-base font-bold text-blue-800">Sala dos Alunos</h2>
+                </div>
+                <div className="flex space-x-1">
+                  <StyledButton onClick={selectAllStudents} variant="secondary" className="text-xs p-1" title="Selecionar todos">
+                    Todos
+                  </StyledButton>
+                  <StyledButton onClick={clearSelection} variant="warning" className="text-xs p-1" title="Limpar seleção">
+                    Limpar
+                  </StyledButton>
+                </div>
               </div>
+              
+              {/* Botões de ação em massa */}
+              <div className="flex space-x-1 mb-2">
+                <StyledButton 
+                  onClick={openBulkCreditModal} 
+                  variant="success" 
+                  className="text-xs p-1 flex items-center"
+                  title="Adicionar crédito aos alunos selecionados"
+                >
+                  <DollarSign size={12} className="mr-1" /> Crédito
+                </StyledButton>
+                <StyledButton 
+                  onClick={bulkDeleteSelectedStudents} 
+                  variant="danger" 
+                  className="text-xs p-1 flex items-center"
+                  title="Excluir alunos selecionados"
+                  disabled={selectedStudents.length === 0}
+                >
+                  <UserMinus size={12} className="mr-1" /> Excluir
+                </StyledButton>
+                <span className="text-xs text-gray-600 self-center">
+                  {selectedStudents.length > 0 ? `${selectedStudents.length} selecionado(s)` : ''}
+                </span>
+              </div>
+              
               <div 
                 ref={studentsListRef}
                 className="max-h-64 overflow-y-auto relative"
               >
                 {filteredStudents.map(student => (
-                  <div key={student.id} className="flex justify-between items-center bg-yellow-50 p-1.5 mb-1.5 rounded border border-gray-300">
-                    <div>
-                      <span className="text-black block text-xs font-bold">{student.nickname}</span>
-                      <span className="text-purple-700 text-xs">
-                        {classes.find(c => c.id === student.classId)?.name}
-                      </span>
-                      <span className="text-gray-600 text-xs">{student.email}</span>
+                  <div key={student.id} className={`flex justify-between items-center bg-yellow-50 p-1.5 mb-1.5 rounded border ${selectedStudents.includes(student.id) ? 'border-blue-500 bg-blue-100' : 'border-gray-300'}`}>
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudents.includes(student.id)}
+                        onChange={() => toggleStudentSelection(student.id)}
+                        className="mr-2 h-4 w-4"
+                        onClick={(e) => e.stopPropagation()} // Evita conflitos com outros eventos de clique
+                      />
+                      <div>
+                        <span className="text-black block text-xs font-bold">{student.nickname}</span>
+                        <span className="text-purple-700 text-xs">
+                          {classes.find(c => c.id === student.classId)?.name}
+                        </span>
+                        <span className="text-gray-600 text-xs">{student.email}</span>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-1">
                       <div className="text-right">
