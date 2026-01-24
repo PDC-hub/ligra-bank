@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import import {
+import{
   Lock,
   Mail,
   Key,
@@ -101,6 +101,10 @@ export default function App() {
   const [newClassName, setNewClassName] = useState('');
   const [studentClassId, setStudentClassId] = useState('geral');
   const [showRegister, setShowRegister] = useState(false);
+  const [fileUploadMethod, setFileUploadMethod] = useState('emails'); // 'emails' or 'students'
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
@@ -611,6 +615,181 @@ export default function App() {
     }
   };
 
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setUploadedFile(file);
+      setUploadStatus('');
+    }
+  };
+
+  const parseCSV = (text) => {
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    const headers = lines[0].split(',').map(header => header.trim().toLowerCase());
+    
+    const results = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',');
+      const obj = {};
+      
+      headers.forEach((header, index) => {
+        obj[header] = values[index] ? values[index].trim() : '';
+      });
+      
+      results.push(obj);
+    }
+    
+    return results;
+  };
+
+  const parseListFile = (text) => {
+    // Parse .list files which contain one email per line
+    return text.split('\n')
+      .map(email => email.trim())
+      .filter(email => email !== '')
+      .map(email => ({ email }));
+  };
+
+  const addStudentsFromClassFile = async (file, targetClassId) => {
+    setUploadStatus('Processando arquivo...');
+    setUploadProgress(0);
+    
+    try {
+      const fileText = await file.text();
+      let parsedData = [];
+      
+      if (file.name.endsWith('.csv')) {
+        parsedData = parseCSV(fileText);
+      } else if (file.name.endsWith('.list')) {
+        parsedData = parseListFile(fileText);
+      } else {
+        // For .xls files, we'll try to parse as CSV if possible
+        // In a real scenario, we'd need a proper library for .xls files
+        parsedData = parseCSV(fileText);
+      }
+      
+      // Determine which field contains the emails based on the method
+      let emails = [];
+      if (fileUploadMethod === 'emails') {
+        // Extract emails from the data - assuming 'email' field exists or it's just a list of emails
+        emails = parsedData.map(row => {
+          // Look for email field in the row
+          if (row.email) return row.email;
+          // If no email field, look for common variations
+          if (row.Email) return row.Email;
+          if (row['e-mail']) return row['e-mail'];
+          if (row['E-Mail']) return row['E-Mail'];
+          // If still no email found, assume it's just a list of emails
+          return Object.values(row)[0] || '';
+        }).filter(email => email !== '');
+      } else if (fileUploadMethod === 'students') {
+        // Extract both names and emails for student entries
+        parsedData.forEach(row => {
+          const name = row.name || row.Name || row.nome || row.Nome || '';
+          const email = row.email || row.Email || row['e-mail'] || row['E-Mail'] || Object.values(row)[0] || '';
+          
+          if (email) {
+            emails.push({ name, email });
+          }
+        });
+      }
+      
+      // Add students to the specified class
+      const addedCount = emails.length;
+      if (addedCount === 0) {
+        setUploadStatus('Nenhum email encontrado no arquivo.');
+        return;
+      }
+      
+      setUploadProgress(30);
+      setUploadStatus(`Encontrados ${addedCount} emails. Adicionando à turma...`);
+      
+      // Create new students based on the extracted data
+      let newStudents = [];
+      if (fileUploadMethod === 'emails') {
+        newStudents = emails.map((email, index) => ({
+          id: students.length + index + 1,
+          name: email.split('@')[0], // Use part before @ as name
+          nickname: email.split('@')[0],
+          email: email,
+          password: 'senha123',
+          balance: 1000,
+          purchases: [],
+          pendingRequests: [],
+          classId: targetClassId
+        }));
+      } else if (fileUploadMethod === 'students') {
+        newStudents = emails.map((entry, index) => {
+          const email = typeof entry === 'string' ? entry : entry.email;
+          const name = typeof entry === 'string' ? email.split('@')[0] : (entry.name || email.split('@')[0]);
+          const nickname = typeof entry === 'string' ? email.split('@')[0] : (entry.name || email.split('@')[0]);
+          
+          return {
+            id: students.length + index + 1,
+            name,
+            nickname,
+            email,
+            password: 'senha123',
+            balance: 1000,
+            purchases: [],
+            pendingRequests: [],
+            classId: targetClassId
+          };
+        });
+      }
+      
+      setUploadProgress(70);
+      setUploadStatus(`Atualizando dados...`);
+      
+      // Update students and classes
+      const updatedStudents = [...students, ...newStudents];
+      const updatedClasses = classes.map(cls => 
+        cls.id === targetClassId 
+          ? { ...cls, studentCount: cls.studentCount + newStudents.length }
+          : cls
+      );
+      
+      setStudents(updatedStudents);
+      setClasses(updatedClasses);
+      
+      setUploadProgress(100);
+      setUploadStatus(`${newStudents.length} alunos adicionados com sucesso à turma!`);
+      
+      // Reset file input
+      setUploadedFile(null);
+      document.getElementById('file-upload-input').value = '';
+      
+      saveData();
+      
+      // Clear status after 5 seconds
+      setTimeout(() => {
+        setUploadStatus('');
+        setUploadProgress(0);
+      }, 5000);
+    } catch (error) {
+      console.error('Error processing file:', error);
+      setUploadStatus(`Erro ao processar arquivo: ${error.message}`);
+      setTimeout(() => {
+        setUploadStatus('');
+        setUploadProgress(0);
+      }, 5000);
+    }
+  };
+
+  const handleFileUpload = () => {
+    if (!uploadedFile) {
+      setUploadStatus('Por favor, selecione um arquivo primeiro.');
+      return;
+    }
+    
+    if (!studentClassId || studentClassId === '') {
+      setUploadStatus('Por favor, selecione uma turma válida.');
+      return;
+    }
+    
+    addStudentsFromClassFile(uploadedFile, studentClassId);
+  };
+
   const StyledButton = ({ onClick, children, variant = 'primary', className = '', disabled = false }) => {
     const baseClasses = "px-3 py-1.5 font-bold rounded border-2 transition-all duration-200 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-sm";
     const variants = {
@@ -1072,6 +1251,91 @@ export default function App() {
               ))}
             </div>
           </div>
+          
+          {/* File Upload Section */}
+          <div className="bg-yellow-100 border-4 border-blue-600 rounded-lg p-3 mb-4">
+            <div className="flex items-center mb-2">
+              <FolderPlus className="mr-1 text-blue-800" size={20} />
+              <h2 className="text-base font-bold text-blue-800">Adicionar Alunos por Arquivo</h2>
+            </div>
+            
+            <div className="mb-3">
+              <label className="block text-black mb-1 text-xs">Método de importação:</label>
+              <div className="flex gap-2">
+                <label className="flex items-center text-xs">
+                  <input
+                    type="radio"
+                    name="uploadMethod"
+                    checked={fileUploadMethod === 'emails'}
+                    onChange={() => setFileUploadMethod('emails')}
+                    className="mr-1"
+                  />
+                  Lista de Emails
+                </label>
+                <label className="flex items-center text-xs">
+                  <input
+                    type="radio"
+                    name="uploadMethod"
+                    checked={fileUploadMethod === 'students'}
+                    onChange={() => setFileUploadMethod('students')}
+                    className="mr-1"
+                  />
+                  Lista de Alunos
+                </label>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="block text-black mb-1 text-xs">Selecionar Turma</label>
+                <select
+                  value={studentClassId}
+                  onChange={(e) => setStudentClassId(e.target.value)}
+                  className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black text-xs"
+                >
+                  {classes.map(cls => (
+                    <option key={cls.id} value={cls.id}>{cls.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-black mb-1 text-xs">Arquivo (.csv, .xls, .list)</label>
+                <input
+                  id="file-upload-input"
+                  type="file"
+                  accept=".csv,.xls,.list,.txt"
+                  onChange={handleFileChange}
+                  className="w-full p-1.5 bg-yellow-50 border-2 border-gray-400 rounded text-black text-xs"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <StyledButton onClick={handleFileUpload} variant="primary" className="text-xs">
+                Importar Alunos
+              </StyledButton>
+            </div>
+            
+            {uploadProgress > 0 && (
+              <div className="mt-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                    style={{ width: `${uploadProgress}%` }}
+                  ></div>
+                </div>
+                <div className="text-xs text-black mt-1">{uploadStatus}</div>
+              </div>
+            )}
+            
+            {uploadStatus && !uploadProgress && (
+              <div className="mt-2 p-1.5 bg-blue-200 border-2 border-blue-500 text-blue-800 rounded text-xs">
+                {uploadStatus}
+              </div>
+            )}
+          </div>
+          
           <div className="bg-yellow-100 border-4 border-green-600 rounded-lg p-3 mb-4">
             <div className="flex items-center mb-2">
               <DollarSign className="mr-1 text-green-800" size={20} />
