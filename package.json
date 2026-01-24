@@ -23,9 +23,6 @@
   "engines": {
     "node": "24.x"
   },
-  "overrides": {
-    "lru-cache": "6.0.0"
-  },
   "eslintConfig": {
     "extends": [
       "react-app",
