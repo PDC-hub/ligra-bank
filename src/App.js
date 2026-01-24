@@ -1,6 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, User, Plus, Minus, ShoppingCart, History, Settings, LogOut, LogIn, CreditCard, Key, Mail, Users, Trophy, Crown, Gift, Wallet, PiggyBank, Cloud, Shield, Edit, AlertTriangle, CheckCircle, XCircle, Clock, Save, Trash2, DollarSign, FolderPlus, Folder, ChevronUp, ChevronDown, Maximize2, UserMinus, FolderMinus, FileText, UserPlus, AlertCircle } from 'lucide-react';
-
+import import {
+  Lock,
+  Mail,
+  Key,
+  UserPlus,
+  Save,
+  CreditCard,
+  LogOut,
+  ShoppingCart,
+  Users,
+  ChevronUp,
+  ChevronDown,
+  Settings,
+  Trash2,
+  LogIn,
+  AlertTriangle,
+  Clock,
+  Shield,
+  Edit,
+  Cloud,
+  FolderPlus,
+  FolderMinus,
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  User,
+  UserMinus
+} from 'react-feather';
 // Initial student data
 const initialStudents = Array.from({ length: 32 }, (_, i) => ({
   id: i + 1,
@@ -82,6 +108,7 @@ export default function App() {
   const studentsListRef = useRef(null);
   const [showScrollControls, setShowScrollControls] = useState(false);
   const [savedData, setSavedData] = useState(null);
+  const [currentPassword, setCurrentPassword] = useState('');
 
   useEffect(() => {
     if (showSavedIcon) {
@@ -746,7 +773,7 @@ export default function App() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="bg-yellow-100 border-4 border-black rounded-lg p-3 mb-4 relative">
             <div className="absolute top-2 right-2">
-              <Wallet className="text-yellow-800" size={24} />
+              <CreditCard className="text-yellow-800" size={24} />
             </div>
             <div className="flex justify-between items-center">
               <div>
@@ -821,7 +848,7 @@ export default function App() {
               </div>
               <div className="bg-yellow-100 border-4 border-purple-600 rounded-lg p-3 relative">
                 <div className="absolute top-2 right-2">
-                  <History className="text-purple-800" size={20} />
+                  <Clock className="text-purple-800" size={20} />
                 </div>
                 <div className="flex items-center mb-2">
                   <h2 className="text-base font-bold text-purple-800">Histórico</h2>
