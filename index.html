@@ -377,21 +377,38 @@ function renderMainContent() {
 // 4. TEACHER VIEWS & ACTIONS
 // ============================================
 function renderTeacherDashboard() {
-    const students = appState.users;
-    const totalEco = students.reduce((sum, u) => sum + (u.saldo || 0), 0);
+    // 1. Filtragem Centralizada de Alunos para o Dashboard
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    let filtrados = appState.users;
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
+    }
+    const totalEco = filtrados.reduce((sum, u) => sum + (u.saldo || 0), 0);
+
     return `
     <div class="fade-in space-y-6">
-        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
+            
+            <!-- NOVO: Dropdown de Turmas movido para o Dashboard para filtro ao vivo da Economia -->
+            <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm bg-white shadow-sm">
+                <option value="todas">Todas as Turmas</option>
+                ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
+        </div>
+        
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-ligra-main">
-                <p class="text-sm font-bold text-gray-400 uppercase">${t('total_economy')}</p>
-                <h2 class="text-3xl md:text-4xl font-black text-ligra-dark mt-2">${fmtCurrency(totalEco)}</h2>
+                <p class="text-sm font-bold text-gray-400 uppercase">${appState.filtroTurma === 'todas' ? t('total_economy') : 'Economia da Turma'}</p>
+                <!-- Saldo em vermelho se for menor que 0 -->
+                <h2 class="text-3xl md:text-4xl font-black mt-2 ${totalEco < 0 ? 'text-red-500' : 'text-ligra-dark'}">${fmtCurrency(totalEco)}</h2>
             </div>
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
-                <p class="text-sm font-bold text-gray-400 uppercase">Total Students</p>
-                <h2 class="text-3xl md:text-4xl font-black text-green-600 mt-2">${students.length}</h2>
+                <p class="text-sm font-bold text-gray-400 uppercase">${appState.filtroTurma === 'todas' ? 'Total Students' : 'Alunos na Turma'}</p>
+                <h2 class="text-3xl md:text-4xl font-black text-green-600 mt-2">${filtrados.length}</h2>
             </div>
         </div>
+        
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
             <div class="flex items-center gap-3 mb-2"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">${t('inflation_ctrl')}</h2></div>
             <p class="text-sm font-medium text-gray-500 mb-6">${t('inflation_desc')}</p>
@@ -401,7 +418,6 @@ function renderTeacherDashboard() {
                 <button onclick="updateInflation()" class="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-xl font-bold btn-press">${t('update_economy')}</button>
             </div>
             
-            <!-- NOVO: Container do gráfico para o professor -->
             <div class="mt-8 pt-6 border-t border-gray-100">
                 <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Histórico de Flutuação Económica</h3>
                 <div class="h-64 w-full"><canvas id="inflationChart"></canvas></div>
@@ -491,7 +507,8 @@ function renderTeacherStudents() {
                                     </div>
                                     <p class="text-xs text-gray-400 mt-0.5">${s.email}</p>
                                 </td>
-                                <td class="p-4 text-right font-black text-ligra-main">${fmtCurrency(s.saldo)}</td>
+                                <!-- Saldo em vermelho se for menor que 0 -->
+                                <td class="p-4 text-right font-black ${s.saldo < 0 ? 'text-red-500' : 'text-ligra-main'}">${fmtCurrency(s.saldo)}</td>
                                 <td class="p-4">
                                     <div class="flex justify-center gap-2">
                                         <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-2 md:py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
@@ -745,11 +762,11 @@ function renderStudentDashboard() {
     <div class="fade-in space-y-6">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
         <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-6 md:p-8 rounded-3xl shadow-lg text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden gap-4">
-            <div class="z-10"><p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p><h2 class="text-4xl md:text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2></div>
+            <!-- Saldo em vermelho mais suave se for menor que 0 para contraste com o fundo azul escuro -->
+            <div class="z-10"><p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p><h2 class="text-4xl md:text-5xl font-black mt-2 ${u.saldo < 0 ? 'text-red-400' : 'text-ligra-accent'}">${fmtCurrency(u.saldo)}</h2></div>
             <i data-lucide="wallet" class="w-16 h-16 opacity-20 absolute right-4 bottom-4 md:relative md:opacity-50"></i>
         </div>
 
-        <!-- NOVO: Container do gráfico para o aluno (Apenas visualização) -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
             <div class="flex items-center gap-3 mb-4"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">Termómetro Económico</h2></div>
             <p class="text-sm font-medium text-gray-500 mb-6">Acompanha se os preços da lojinha estão a subir ou a descer com base no comportamento da turma.</p>
@@ -886,7 +903,7 @@ async function execFundos(id, tipo) {
     const u = appState.users.find(x => x.id === id);
     let newSaldo = u.saldo;
     if(tipo === 'credito') newSaldo += v;
-    else { if (u.saldo < v) { hideLoading(); toast(t('no_funds'), 'error'); return; } newSaldo -= v; }
+    else { newSaldo -= v; } // Removida a trava que limitava o débito, permitindo negativar a conta.
     
     await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', id);
     await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: id, tipo, valor: v, descricao: d }]);
