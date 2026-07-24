@@ -1,506 +1,1054 @@
-<html>
-    <body>
-        <script>
-            const SUPABASE_URL = 'https://dxgofzbjpabmuptqsscg.supabase.co/rest/v1/';
-            const SUPABASE_ANON_KEY = 'sb_publishable_vbKvJDE0BiTtRxOu6bhW0A_AdAJDEvr';
-// ============================================
-// RENDER - ALUNOS
-// ============================================
-function renderAlunos() {
-  let filtrados = appState.alunos;
-  if (appState.filtroTurma !== 'todas') {
-    filtrados = filtrados.filter(a => a.turma_id === appState.filtroTurma);
-  }
-  if (appState.buscaAluno) {
-    const q = appState.buscaAluno.toLowerCase();
-    filtrados = filtrados.filter(a => a.nome.toLowerCase().includes(q) || (a.matricula || '').toLowerCase().includes(q));
-  }
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LigraBank</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-  return `
-    <div class="fade-in">
-      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-800">Alunos</h1>
-          <p class="text-gray-500">${filtrados.length} aluno(s) encontrado(s)</p>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Nunito', 'sans-serif'] },
+                    colors: {
+                        ligra: { light: '#89C2F5', main: '#3B82F6', dark: '#1E3A8A', accent: '#FBBF24' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { background-color: #F3F4F6; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .btn-press:active { transform: scale(0.97); }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        
+        /* Spinner Loader */
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3B82F6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex overflow-hidden selection:bg-ligra-light selection:text-white">
+
+    <!-- Container Root -->
+    <div id="root" class="w-full h-full flex"></div>
+    <div id="modal-container"></div>
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+    <div id="global-loader" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+        <div class="flex flex-col items-center gap-3">
+            <div class="loader w-10 h-10 border-4"></div>
+            <p class="font-bold text-ligra-main animate-pulse">Loading...</p>
         </div>
-        <button onclick="modalNovoAluno()" class="bg-[#89C2F5] hover:bg-[#5B8FB3] text-white px-5 py-2.5 rounded-xl font-medium transition-all btn-press flex items-center gap-2">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          Novo Aluno
-        </button>
-      </div>
+    </div>
 
-      <!-- Filtros -->
-      <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-3">
-        <div class="flex-1 relative">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input type="text" placeholder="Buscar aluno..." value="${appState.buscaAluno}"
-            oninput="appState.buscaAluno=this.value; renderApp();"
-            class="w-full pl-10 pr-4 py-2.5 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
+<script>
+// ============================================
+// 1. SUPABASE SETUP & STATE
+// ============================================
+const SUPABASE_URL = 'https://dxgofzbjpabmuptqsscg.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_vbKvJDE0BiTtRxOu6bhW0A_AdAJDEvr';
+
+// Corrigido: Usar 'supabaseClient' em vez de 'supabase' para evitar conflito com a biblioteca global injetada pelo CDN.
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const generateId = () => Math.random().toString(36).substr(2, 12);
+
+let appState = {
+    lang: 'en',
+    currentUser: null,
+    currentView: 'dashboard',
+    inflationRate: 1.0, 
+    
+    // Arrays will be populated from Supabase
+    users: [],
+    transacoes: [],
+    loja: [],
+    solicitacoes: []
+};
+
+// ============================================
+// 2. DICTIONARY (TRANSLATIONS)
+// ============================================
+const translations = {
+    en: {
+        slogan: "Where your investment yields a little more",
+        login_title: "Welcome to LigraBank",
+        email: "User / Email",
+        password: "Password",
+        login_btn: "Login",
+        lang_toggle: "Mudar para Português",
+        
+        // Menus
+        nav_dashboard: "Dashboard",
+        nav_students: "Students",
+        nav_store: "Store Mgmt",
+        nav_requests: "Requests",
+        nav_mystore: "Store",
+        nav_myitems: "My Items",
+        nav_history: "History",
+        logout: "Logout",
+
+        // Teacher Dashboard
+        total_economy: "Total Economy",
+        inflation_ctrl: "Economy Control (Inflation/Deflation)",
+        inflation_desc: "Adjust the prices in the store. Values above 1.0 make items more expensive. Values below 1.0 make them cheaper.",
+        current_rate: "Current Rate",
+        update_economy: "Update Economy",
+
+        // Students Management
+        add_student: "Add Student",
+        import_csv: "Import CSV",
+        student_list: "Student List",
+        balance: "Balance",
+        add_funds: "Add Funds",
+        sub_funds: "Charge",
+        reset_pass: "Reset Pass",
+        
+        // Store
+        add_item: "Add Item",
+        base_price: "Base Price",
+        store_catalog: "Store Catalog",
+        buy: "Buy",
+        price: "Price",
+        
+        // Requests
+        pending_req: "Pending Requests",
+        approve: "Approve",
+        deny: "Deny",
+
+        // Student Dashboard
+        hello: "Hello",
+        my_balance: "My Balance",
+        change_pass: "Change My Password",
+        new_pass: "New Password",
+        save: "Save",
+        
+        // Student Items
+        acquired_items: "My Acquired Items",
+        pending_items: "My Pending Requests",
+
+        // Modals & Msgs
+        confirm: "Confirm",
+        cancel: "Cancel",
+        reason: "Reason / Description",
+        amount: "Amount",
+        success_buy: "Request sent to teacher!",
+        no_funds: "Not enough funds!",
+        invalid_email: "Student email must end with @portalsesisp.org.br"
+    },
+    pt: {
+        slogan: "Onde seu investimento rende um pouco mais",
+        login_title: "Bem-vindo ao LigraBank",
+        email: "Usuário / E-mail",
+        password: "Senha (Password)",
+        login_btn: "Entrar",
+        lang_toggle: "Switch to English",
+        
+        nav_dashboard: "Painel",
+        nav_students: "Alunos",
+        nav_store: "Gerenciar Loja",
+        nav_requests: "Solicitações",
+        nav_mystore: "Lojinha",
+        nav_myitems: "Meus Itens",
+        nav_history: "Histórico",
+        logout: "Sair",
+
+        total_economy: "Economia Total",
+        inflation_ctrl: "Controle Econômico (Inflação/Deflação)",
+        inflation_desc: "Ajuste os preços da loja. Valores acima de 1.0 deixam os itens mais caros. Abaixo de 1.0, mais baratos.",
+        current_rate: "Taxa Atual",
+        update_economy: "Atualizar Economia",
+
+        add_student: "Novo Aluno",
+        import_csv: "Importar CSV",
+        student_list: "Lista de Alunos",
+        balance: "Saldo",
+        add_funds: "Creditar",
+        sub_funds: "Debitar",
+        reset_pass: "Resetar Senha",
+
+        add_item: "Novo Item",
+        base_price: "Preço Base",
+        store_catalog: "Catálogo da Loja",
+        buy: "Comprar",
+        price: "Preço",
+
+        pending_req: "Solicitações Pendentes",
+        approve: "Aprovar",
+        deny: "Rejeitar",
+
+        hello: "Olá",
+        my_balance: "Meu Saldo",
+        change_pass: "Mudar Minha Senha",
+        new_pass: "Nova Senha",
+        save: "Salvar",
+
+        acquired_items: "Meus Itens Adquiridos",
+        pending_items: "Minhas Solicitações Pendentes",
+
+        confirm: "Confirmar",
+        cancel: "Cancelar",
+        reason: "Motivo / Descrição",
+        amount: "Valor",
+        success_buy: "Solicitação enviada ao professor!",
+        no_funds: "Saldo insuficiente!",
+        invalid_email: "O e-mail do aluno deve terminar com @portalsesisp.org.br"
+    }
+};
+
+const t = (key) => translations[appState.lang][key] || key;
+
+// ============================================
+// 3. UTILITIES
+// ============================================
+const $ = selector => document.querySelector(selector);
+
+function showLoading() { $('#global-loader').classList.remove('hidden'); }
+function hideLoading() { $('#global-loader').classList.add('hidden'); }
+
+function fmtCurrency(valor) {
+    return `LM$ ${parseFloat(valor || 0).toFixed(2)}`;
+}
+
+function toggleLang() {
+    appState.lang = appState.lang === 'en' ? 'pt' : 'en';
+    render();
+}
+
+function toast(msg, type = 'success') {
+    const container = $('#toast-container');
+    const toast = document.createElement('div');
+    const bg = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+    toast.className = `${bg} text-white px-6 py-3 rounded-lg shadow-lg font-bold fade-in`;
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+
+function showModal(content) {
+    $('#modal-container').innerHTML = `
+        <div class="fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4 fade-in" onclick="closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onclick="event.stopPropagation()">
+                ${content}
+            </div>
         </div>
-        <select onchange="appState.filtroTurma=this.value; renderApp();"
-          class="px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-          <option value="todas" ${appState.filtroTurma === 'todas' ? 'selected' : ''}>Todas as turmas</option>
-          ${appState.turmas.map(t => `<option value="${t.id}" ${appState.filtroTurma === t.id ? 'selected' : ''}>${t.nome}</option>`).join('')}
-        </select>
-      </div>
+    `;
+    lucide.createIcons();
+}
 
-      <!-- Lista de alunos -->
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        ${filtrados.length === 0 ? '<div class="p-8 text-center text-gray-400"><p>Nenhum aluno encontrado</p></div>' : ''}
-        ${filtrados.map(a => {
-          const turma = appState.turmas.find(t => t.id === a.turma_id);
-          return `
-          <div class="p-4 flex items-center justify-between border-b border-gray-50 last:border-0 student-card">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-gradient-to-br from-[#89C2F5] to-[#5B8FB3] flex items-center justify-center text-white font-bold">
-                ${a.nome.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <p class="font-medium text-gray-800">${a.nome}</p>
-                <div class="flex items-center gap-2 text-xs text-gray-400">
-                  ${turma ? `<span class="badge-blue px-2 py-0.5 rounded-full">${turma.nome}</span>` : ''}
-                  ${a.matricula ? `<span>${a.matricula}</span>` : ''}
+function closeModal() { $('#modal-container').innerHTML = ''; }
+
+function changeView(view) {
+    appState.currentView = view;
+    render();
+}
+
+// ============================================
+// 4. CORE LOGIC (AUTH & DB FETCH)
+// ============================================
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = $('#loginEmail').value.trim();
+    const pass = $('#loginPass').value;
+    
+    showLoading();
+    // Procurar user na tabela customizada 'users'
+    const { data: user, error } = await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', pass)
+        .single();
+
+    if (error || !user) {
+        hideLoading();
+        toast('Invalid credentials / Credenciais inválidas', 'error');
+        return;
+    }
+
+    appState.currentUser = user;
+    appState.currentView = 'dashboard';
+    
+    await refreshData();
+    hideLoading();
+    render();
+}
+
+function handleLogout() {
+    appState.currentUser = null;
+    render();
+}
+
+async function refreshData() {
+    if (!appState.currentUser) return;
+    const uId = appState.currentUser.id;
+    const role = appState.currentUser.role;
+
+    try {
+        // Puxar a loja (ambos veem)
+        const { data: loja } = await supabaseClient.from('loja').select('*');
+        appState.loja = loja || [];
+
+        if (role === 'teacher') {
+            const { data: users } = await supabaseClient.from('users').select('*').eq('role', 'student');
+            appState.users = users || [];
+
+            const { data: transacoes } = await supabaseClient.from('transacoes').select('*');
+            appState.transacoes = transacoes || [];
+
+            const { data: solicitacoes } = await supabaseClient.from('solicitacoes_item').select('*');
+            appState.solicitacoes = solicitacoes || [];
+        } else {
+            // Atualizar os dados do próprio aluno
+            const { data: user } = await supabaseClient.from('users').select('saldo').eq('id', uId).single();
+            if (user) appState.currentUser.saldo = user.saldo;
+
+            const { data: transacoes } = await supabaseClient.from('transacoes').select('*').eq('aluno_id', uId);
+            appState.transacoes = transacoes || [];
+
+            const { data: solicitacoes } = await supabaseClient.from('solicitacoes_item').select('*').eq('aluno_id', uId);
+            appState.solicitacoes = solicitacoes || [];
+        }
+    } catch (err) {
+        toast('Failed to load data', 'error');
+        console.error(err);
+    }
+}
+
+// ============================================
+// 5. RENDER FUNCTIONS
+// ============================================
+function render() {
+    const root = $('#root');
+    if (!appState.currentUser) {
+        root.innerHTML = renderLoginScreen();
+    } else {
+        root.innerHTML = `
+            ${renderSidebar()}
+            <main class="flex-1 flex flex-col h-full bg-gray-50 overflow-y-auto">
+                <header class="bg-white p-4 border-b border-gray-200 flex justify-end items-center shadow-sm gap-4">
+                    <button onclick="toggleLang()" class="text-sm font-bold text-gray-500 hover:text-ligra-main flex items-center gap-2">
+                        <i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}
+                    </button>
+                    <div class="font-black text-ligra-dark">${appState.currentUser.nome}</div>
+                </header>
+                <div class="p-6 max-w-5xl mx-auto w-full">
+                    ${renderMainContent()}
                 </div>
-              </div>
+            </main>
+        `;
+    }
+    lucide.createIcons();
+}
+
+function renderLoginScreen() {
+    return `
+    <div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-ligra-light p-4">
+        <button onclick="toggleLang()" class="absolute top-4 right-4 text-sm font-bold text-gray-600 hover:text-ligra-dark flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow">
+            <i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}
+        </button>
+        
+        <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md text-center">
+            <div class="w-20 h-20 bg-ligra-main text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4">
+                <i data-lucide="piggy-bank" class="w-12 h-12"></i>
             </div>
+            <h1 class="text-3xl font-black text-ligra-dark">LigraBank</h1>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1 mb-8">"${t('slogan')}"</p>
+            
+            <h2 class="text-xl font-bold text-gray-800 mb-6">${t('login_title')}</h2>
+            
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <input type="text" id="loginEmail" placeholder="${t('email')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                </div>
+                <div>
+                    <input type="password" id="loginPass" placeholder="${t('password')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                </div>
+                <button type="submit" class="w-full py-3 rounded-xl bg-ligra-main text-white font-black text-lg shadow-md hover:bg-blue-600 transition-all btn-press">
+                    ${t('login_btn')}
+                </button>
+            </form>
+            
+            <p class="mt-6 text-xs text-gray-400">Please make sure to add your teacher account<br>via Supabase dashboard first.</p>
+        </div>
+    </div>
+    `;
+}
+
+function renderSidebar() {
+    const role = appState.currentUser.role;
+    let links = '';
+    
+    if (role === 'teacher') {
+        links = `
+            ${navItem('dashboard', t('nav_dashboard'), 'layout-dashboard')}
+            ${navItem('students', t('nav_students'), 'users')}
+            ${navItem('store', t('nav_store'), 'store')}
+            ${navItem('requests', t('nav_requests'), 'shopping-bag')}
+        `;
+    } else {
+        links = `
+            ${navItem('dashboard', t('nav_dashboard'), 'user')}
+            ${navItem('mystore', t('nav_mystore'), 'shopping-cart')}
+            ${navItem('myitems', t('nav_myitems'), 'package')}
+            ${navItem('history', t('nav_history'), 'clock')}
+        `;
+    }
+
+    return `
+    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+        <div class="p-6 border-b border-gray-100 flex items-center gap-3">
+            <div class="w-10 h-10 bg-ligra-main rounded-xl flex items-center justify-center text-white">
+                <i data-lucide="piggy-bank" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h1 class="font-black text-xl text-ligra-dark tracking-tight">LigraBank</h1>
+                <p class="text-[10px] text-gray-400 font-bold uppercase">${role}</p>
+            </div>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">
+            ${links}
+        </nav>
+        <div class="p-4 border-t border-gray-100">
+            <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-3 text-red-500 rounded-xl hover:bg-red-50 font-bold transition-colors">
+                <i data-lucide="log-out" class="w-5 h-5"></i> ${t('logout')}
+            </button>
+        </div>
+    </aside>
+    `;
+}
+
+function navItem(view, label, icon) {
+    const isActive = appState.currentView === view;
+    const activeClass = isActive ? 'bg-blue-50 text-ligra-main' : 'text-gray-500 hover:bg-gray-50';
+    return `
+        <button onclick="changeView('${view}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${activeClass}">
+            <i data-lucide="${icon}" class="w-5 h-5"></i> ${label}
+        </button>
+    `;
+}
+
+function renderMainContent() {
+    const view = appState.currentView;
+    const role = appState.currentUser.role;
+    
+    if (role === 'teacher') {
+        if (view === 'dashboard') return renderTeacherDashboard();
+        if (view === 'students') return renderTeacherStudents();
+        if (view === 'store') return renderTeacherStore();
+        if (view === 'requests') return renderTeacherRequests();
+    } else {
+        if (view === 'dashboard') return renderStudentDashboard();
+        if (view === 'mystore') return renderStudentStore();
+        if (view === 'myitems') return renderStudentItems();
+        if (view === 'history') return renderStudentHistory();
+    }
+    return '';
+}
+
+// ============================================
+// 6. TEACHER VIEWS & ACTIONS
+// ============================================
+function renderTeacherDashboard() {
+    const students = appState.users;
+    const totalEco = students.reduce((sum, u) => sum + (u.saldo || 0), 0);
+    
+    return `
+    <div class="fade-in space-y-6">
+        <h1 class="text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
+        
+        <div class="grid grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-ligra-main">
+                <p class="text-sm font-bold text-gray-400 uppercase">${t('total_economy')}</p>
+                <h2 class="text-4xl font-black text-ligra-dark mt-2">${fmtCurrency(totalEco)}</h2>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
+                <p class="text-sm font-bold text-gray-400 uppercase">Total Students</p>
+                <h2 class="text-4xl font-black text-green-600 mt-2">${students.length}</h2>
+            </div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6">
+            <div class="flex items-center gap-3 mb-2">
+                <i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i>
+                <h2 class="text-xl font-black text-gray-800">${t('inflation_ctrl')}</h2>
+            </div>
+            <p class="text-sm font-medium text-gray-500 mb-6">${t('inflation_desc')}</p>
+            
             <div class="flex items-center gap-4">
-              <div class="text-right">
-                <p class="font-bold ${(a.saldo || 0) >= 0 ? 'text-green-600' : 'text-red-600'}">${fmtCurrency(a.saldo || 0)}</p>
-              </div>
-              <div class="flex items-center gap-1 no-print">
-                <button onclick="modalCreditar('${a.id}')" class="p-2 rounded-lg hover:bg-green-50 text-green-600 transition-all" title="Creditar">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <div class="flex-1">
+                    <input type="range" id="inflationSlider" min="0.5" max="2.0" step="0.1" value="${appState.inflationRate}" 
+                        oninput="document.getElementById('infVal').innerText = 'x' + parseFloat(this.value).toFixed(1)"
+                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div class="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl font-black text-xl" id="infVal">
+                    x${appState.inflationRate.toFixed(1)}
+                </div>
+                <button onclick="updateInflation()" class="bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-md btn-press">
+                    ${t('update_economy')}
                 </button>
-                <button onclick="modalDebitar('${a.id}')" class="p-2 rounded-lg hover:bg-red-50 text-red-600 transition-all" title="Debitar">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12H4"/></svg>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function updateInflation() {
+    const val = parseFloat($('#inflationSlider').value);
+    appState.inflationRate = val;
+    toast('Economy updated! (Local state)');
+    render();
+}
+
+function renderTeacherStudents() {
+    const students = appState.users;
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-black text-gray-800">${t('nav_students')}</h1>
+            <div class="flex gap-2">
+                <label class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i> ${t('import_csv')}
+                    <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+                </label>
+                <button onclick="modalAddStudent()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md btn-press flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i> ${t('add_student')}
                 </button>
-                <button onclick="excluirAluno('${a.id}')" class="p-2 rounded-lg hover:bg-red-50 text-red-400 transition-all" title="Excluir">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                </button>
-              </div>
             </div>
-          </div>
-          `;
-        }).join('')}
-      </div>
-    </div>
-  `;
-}
-
-// ============================================
-// RENDER - TURMAS
-// ============================================
-function renderTurmas() {
-  return `
-    <div class="fade-in">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-800">Turmas</h1>
-          <p class="text-gray-500">${appState.turmas.length} turma(s)</p>
         </div>
-        <button onclick="modalNovaTurma()" class="bg-[#89C2F5] hover:bg-[#5B8FB3] text-white px-5 py-2.5 rounded-xl font-medium transition-all btn-press flex items-center gap-2">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          Nova Turma
-        </button>
-      </div>
+        
+        <p class="text-xs text-gray-400">CSV Format: Name, Email (must be @portalsesisp.org.br)</p>
 
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        ${appState.turmas.map(t => {
-          const alunosTurma = appState.alunos.filter(a => a.turma_id === t.id);
-          const saldoTurma = alunosTurma.reduce((s, a) => s + (a.saldo || 0), 0);
-          return `
-          <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 card-hover">
-            <div class="flex items-start justify-between mb-3">
-              <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                <svg width="24" height="24" fill="none" stroke="#8b5cf6" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-              </div>
-              <button onclick="excluirTurma('${t.id}')" class="text-gray-400 hover:text-red-500 transition-all">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-              </button>
-            </div>
-            <h3 class="font-bold text-gray-800 text-lg">${t.nome}</h3>
-            <p class="text-sm text-gray-500 mb-3">${t.descricao || 'Sem descrição'}</p>
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-500">${alunosTurma.length} aluno(s)</span>
-              <span class="font-bold text-green-600">${fmtCurrency(saldoTurma)}</span>
-            </div>
-          </div>
-          `;
-        }).join('')}
-        ${appState.turmas.length === 0 ? '<div class="col-span-full text-center p-8 text-gray-400"><p>Nenhuma turma cadastrada</p></div>' : ''}
-      </div>
-    </div>
-  `;
-}
-
-// ============================================
-// RENDER - TRANSACOES
-// ============================================
-function renderTransacoes() {
-  return `
-    <div class="fade-in">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-800">Transações</h1>
-          <p class="text-gray-500">${appState.transacoes.length} transação(ões)</p>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">${t('balance')}</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    ${students.map(s => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-4">
+                                <p class="font-bold text-gray-800">${s.nome}</p>
+                                <p class="text-xs text-gray-400">${s.email}</p>
+                            </td>
+                            <td class="p-4 text-right font-black text-ligra-main">${fmtCurrency(s.saldo)}</td>
+                            <td class="p-4">
+                                <div class="flex justify-center gap-2">
+                                    <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
+                                    <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">- ${t('sub_funds')}</button>
+                                    <button onclick="modalResetPass('${s.id}')" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300">
+                                        <i data-lucide="key" class="w-3 h-3"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
         </div>
-        <button onclick="modalNovaTransacao()" class="bg-[#89C2F5] hover:bg-[#5B8FB3] text-white px-5 py-2.5 rounded-xl font-medium transition-all btn-press flex items-center gap-2">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-          Nova Transação
-        </button>
-      </div>
-
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div class="overflow-x-auto">
-          <table class="w-full">
-            <thead>
-              <tr class="border-b border-gray-100">
-                <th class="text-left p-4 text-xs font-semibold text-gray-500 uppercase">Aluno</th>
-                <th class="text-left p-4 text-xs font-semibold text-gray-500 uppercase">Tipo</th>
-                <th class="text-right p-4 text-xs font-semibold text-gray-500 uppercase">Valor</th>
-                <th class="text-left p-4 text-xs font-semibold text-gray-500 uppercase">Descrição</th>
-                <th class="text-left p-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${appState.transacoes.map(t => `
-                <tr class="border-b border-gray-50 last:border-0 transaction-row">
-                  <td class="p-4">
-                    <p class="font-medium text-sm text-gray-800">${t.alunos?.nome || 'Aluno'}</p>
-                    <p class="text-xs text-gray-400">${t.turmas?.nome || ''}</p>
-                  </td>
-                  <td class="p-4">
-                    <span class="badge-${t.tipo === 'credito' ? 'green' : 'red'} px-2 py-1 rounded-full text-xs font-medium capitalize">${t.tipo}</span>
-                  </td>
-                  <td class="p-4 text-right font-bold ${t.tipo === 'credito' ? 'text-green-600' : 'text-red-600'}">
-                    ${t.tipo === 'credito' ? '+' : '-'} ${fmtCurrency(t.valor)}
-                  </td>
-                  <td class="p-4 text-sm text-gray-600">${t.descricao || '-'}</td>
-                  <td class="p-4 text-xs text-gray-400">${fmtDateTime(t.created_at)}</td>
-                </tr>
-              `).join('')}
-              ${appState.transacoes.length === 0 ? '<tr><td colspan="5" class="p-8 text-center text-gray-400">Nenhuma transação</td></tr>' : ''}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
-  `;
+    `;
 }
 
-// ============================================
-// RENDER - RANKING
-// ============================================
-function renderRanking() {
-  const ranking = [...appState.alunos].sort((a, b) => (b.saldo || 0) - (a.saldo || 0));
-  const medalhas = ['🥇', '🥈', '🥉'];
-  
-  return `
-    <div class="fade-in">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">Ranking</h1>
-        <p class="text-gray-500">Alunos com melhor desempenho</p>
-      </div>
+async function handleCSVUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        ${ranking.map((a, i) => {
-          const turma = appState.turmas.find(t => t.id === a.turma_id);
-          const posicao = i + 1;
-          return `
-          <div class="p-4 flex items-center gap-4 border-b border-gray-50 last:border-0 ${posicao <= 3 ? 'bg-gradient-to-r from-yellow-50/50 to-transparent' : ''}">
-            <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${posicao <= 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}">
-              ${posicao <= 3 ? medalhas[i] : posicao}
-            </div>
-            <div class="flex-1">
-              <p class="font-medium text-gray-800">${a.nome}</p>
-              <p class="text-xs text-gray-400">${turma?.nome || 'Sem turma'}</p>
-            </div>
-            <p class="font-bold text-lg ${(a.saldo || 0) >= 0 ? 'text-green-600' : 'text-red-600'}">${fmtCurrency(a.saldo || 0)}</p>
-          </div>
-          `;
-        }).join('')}
-        ${ranking.length === 0 ? '<div class="p-8 text-center text-gray-400">Nenhum aluno cadastrado</div>' : ''}
-      </div>
-    </div>
-  `;
-}
+    showLoading();
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const text = e.target.result;
+        // Quebra as linhas corretamente (suporta Windows e Mac)
+        const lines = text.split(/\r?\n/);
+        let newUsers = [];
 
-// ============================================
-// RENDER - RELATORIOS
-// ============================================
-function renderRelatorios() {
-  const totalCredito = appState.transacoes.filter(t => t.tipo === 'credito').reduce((s, t) => s + (t.valor || 0), 0);
-  const totalDebito = appState.transacoes.filter(t => t.tipo === 'debito').reduce((s, t) => s + (t.valor || 0), 0);
-  
-  // Por turma
-  const porTurma = {};
-  appState.turmas.forEach(t => {
-    const alunosTurma = appState.alunos.filter(a => a.turma_id === t.id);
-    porTurma[t.nome] = {
-      alunos: alunosTurma.length,
-      saldo: alunosTurma.reduce((s, a) => s + (a.saldo || 0), 0)
+        if (lines.length > 0) {
+            // Descobre automaticamente se o CSV usa vírgula (,) ou ponto e vírgula (;)
+            const delimiter = lines[0].includes(';') ? ';' : ',';
+            
+            // Lê a primeira linha (cabeçalhos)
+            const headers = lines[0].toLowerCase().split(delimiter).map(h => h?.trim());
+            
+            // Encontra a posição das colunas "nome" e "email"
+            let nomeIdx = headers.indexOf('nome');
+            let emailIdx = headers.indexOf('email');
+            
+            // Se não encontrar pelo nome do cabeçalho, assume colunas 1 e 2
+            if (nomeIdx === -1) nomeIdx = 0;
+            if (emailIdx === -1) emailIdx = 1;
+
+            // Começa no i = 1 para saltar o cabeçalho
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue; // Ignora linhas vazias
+                
+                const cols = lines[i].split(delimiter).map(s => s?.trim());
+                const nome = cols[nomeIdx];
+                const email = cols[emailIdx];
+
+                // Valida se tem nome, email e se termina com o domínio correto
+                if (nome && email && email.endsWith('@portalsesisp.org.br')) {
+                    newUsers.push({
+                        id: generateId(),
+                        role: 'student',
+                        nome: nome,
+                        email: email,
+                        password: '123',
+                        saldo: 0
+                    });
+                }
+            }
+        }
+
+        if(newUsers.length > 0) {
+            const { error } = await supabaseClient.from('users').insert(newUsers);
+            if(error) {
+                console.error('Erro no Supabase:', error);
+                toast('Erro ao inserir alunos no Supabase. Verifique o RLS.', 'error');
+            } else {
+                toast(`${newUsers.length} alunos importados com sucesso!`);
+            }
+        } else {
+            toast('Nenhum aluno válido com e-mail @portalsesisp foi encontrado.', 'error');
+        }
+        
+        await refreshData();
+        hideLoading();
+        render();
+        
+        // Reseta o input para poder importar novamente se necessário
+        event.target.value = '';
     };
-  });
+    reader.readAsText(file);
+}
 
-  return `
-    <div class="fade-in">
-      <div class="mb-6">
-        <h1 class="text-2xl font-bold text-gray-800">Relatórios</h1>
-        <p class="text-gray-500">Resumo financeiro</p>
-      </div>
+function renderTeacherStore() {
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex justify-between items-center">
+            <h1 class="text-3xl font-black text-gray-800">${t('store_catalog')}</h1>
+            <button onclick="modalAddItem()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md btn-press flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i> ${t('add_item')}
+            </button>
+        </div>
+        
+        <div class="grid grid-cols-3 gap-6">
+            ${appState.loja.map(item => `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                    <div>
+                        <div class="w-12 h-12 bg-blue-50 text-ligra-main rounded-xl flex items-center justify-center mb-4">
+                            <i data-lucide="package" class="w-6 h-6"></i>
+                        </div>
+                        <h3 class="font-black text-lg text-gray-800">${item.nome}</h3>
+                        <p class="text-sm text-gray-500 mt-1">${item.descricao}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-400 uppercase">${t('base_price')}</span>
+                        <span class="font-black text-lg text-gray-800">${fmtCurrency(item.preco_base)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    </div>
+    `;
+}
 
-      <div class="grid md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <p class="text-sm text-gray-500 mb-1">Total Creditado</p>
-          <p class="text-2xl font-bold text-green-600">${fmtCurrency(totalCredito)}</p>
+function renderTeacherRequests() {
+    const pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
+    
+    return `
+    <div class="fade-in space-y-6">
+        <h1 class="text-3xl font-black text-gray-800">${t('pending_req')}</h1>
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">No requests</td></tr>` : ''}
+                    ${pendentes.map(s => {
+                        const aluno = appState.users.find(u => u.id === s.aluno_id);
+                        const item = appState.loja.find(i => i.id === s.item_id);
+                        return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Unknown'}</td>
+                            <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Unknown'}</td>
+                            <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
+                            <td class="p-4">
+                                <div class="flex justify-center gap-2">
+                                    <button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button>
+                                    <button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button>
+                                </div>
+                            </td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
         </div>
-        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <p class="text-sm text-gray-500 mb-1">Total Debitado</p>
-          <p class="text-2xl font-bold text-red-600">${fmtCurrency(totalDebito)}</p>
-        </div>
-        <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <p class="text-sm text-gray-500 mb-1">Saldo em Circulação</p>
-          <p class="text-2xl font-bold text-blue-600">${fmtCurrency(appState.saldoGeral)}</p>
-        </div>
-      </div>
+    </div>
+    `;
+}
 
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6">
-        <div class="p-5 border-b border-gray-100">
-          <h3 class="font-bold text-gray-800">Por Turma</h3>
-        </div>
-        <div class="divide-y divide-gray-50">
-          ${Object.entries(porTurma).map(([nome, dados]) => `
-            <div class="p-4 flex items-center justify-between">
-              <div>
-                <p class="font-medium text-gray-800">${nome}</p>
-                <p class="text-xs text-gray-400">${dados.alunos} aluno(s)</p>
-              </div>
-              <p class="font-bold text-gray-800">${fmtCurrency(dados.saldo)}</p>
+async function handleRequest(reqId, action) {
+    showLoading();
+    const req = appState.solicitacoes.find(s => s.id === reqId);
+    if (!req) { hideLoading(); return; }
+    
+    // Update request status in DB
+    await supabaseClient.from('solicitacoes_item').update({ status: action }).eq('id', reqId);
+    
+    // Se rejeitado, devolve o dinheiro ao aluno
+    if (action === 'rejeitado') {
+        const aluno = appState.users.find(u => u.id === req.aluno_id);
+        if(aluno) {
+            const newSaldo = aluno.saldo + parseFloat(req.preco_pago);
+            await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', aluno.id);
+            await supabaseClient.from('transacoes').insert([{
+                id: generateId(),
+                aluno_id: aluno.id,
+                tipo: 'credito',
+                valor: req.preco_pago,
+                descricao: 'Refund for rejected request'
+            }]);
+        }
+    }
+    
+    toast(`Request ${action === 'aprovado' ? 'Approved' : 'Denied'}`);
+    await refreshData();
+    hideLoading();
+    render();
+}
+
+
+// ============================================
+// 7. STUDENT VIEWS & ACTIONS
+// ============================================
+function renderStudentDashboard() {
+    const u = appState.currentUser;
+    return `
+    <div class="fade-in space-y-6">
+        <h1 class="text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
+        
+        <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-8 rounded-3xl shadow-lg text-white flex justify-between items-center">
+            <div>
+                <p class="text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p>
+                <h2 class="text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2>
             </div>
-          `).join('')}
-          ${Object.keys(porTurma).length === 0 ? '<div class="p-5 text-center text-gray-400">Nenhuma turma</div>' : ''}
+            <i data-lucide="wallet" class="w-16 h-16 opacity-50"></i>
         </div>
-      </div>
 
-      <button onclick="exportarDados()" class="bg-gray-800 hover:bg-gray-900 text-white px-5 py-2.5 rounded-xl font-medium transition-all btn-press flex items-center gap-2">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12"/></svg>
-        Exportar Dados (JSON)
-      </button>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4"></i> ${t('change_pass')}</h3>
+            <div class="flex gap-2">
+                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-2 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none">
+                <button onclick="changeOwnPass()" class="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold">${t('save')}</button>
+            </div>
+        </div>
     </div>
-  `;
+    `;
 }
 
-function exportarDados() {
-  const dados = {
-    professor: appState.professor,
-    turmas: appState.turmas,
-    alunos: appState.alunos,
-    transacoes: appState.transacoes,
-    exportado_em: new Date().toISOString()
-  };
-  const blob = new Blob([JSON.stringify(dados, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `ligra-bank-backup-${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  toast('Dados exportados!', 'success');
+async function changeOwnPass() {
+    const np = $('#newPass').value;
+    if (np.length < 3) { toast('Password too short', 'error'); return; }
+    
+    showLoading();
+    const { error } = await supabaseClient.from('users').update({ password: np }).eq('id', appState.currentUser.id);
+    hideLoading();
+    
+    if (error) { toast('Error updating password', 'error'); } 
+    else { 
+        appState.currentUser.password = np;
+        toast('Password updated!'); 
+        $('#newPass').value = '';
+    }
+}
+
+function renderStudentStore() {
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex justify-between items-end mb-6">
+            <div>
+                <h1 class="text-3xl font-black text-gray-800">${t('nav_mystore')} 🛒</h1>
+                <p class="text-gray-500 font-medium mt-1">Inflation Index: <span class="text-purple-500 font-bold">x${appState.inflationRate.toFixed(1)}</span></p>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            ${appState.loja.map(item => {
+                const finalPrice = item.preco_base * appState.inflationRate;
+                const canAfford = appState.currentUser.saldo >= finalPrice;
+                return `
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                    <div>
+                        <div class="w-16 h-16 bg-blue-50 text-ligra-main rounded-2xl flex items-center justify-center mb-4">
+                            <i data-lucide="gift" class="w-8 h-8"></i>
+                        </div>
+                        <h3 class="font-black text-xl text-gray-800">${item.nome}</h3>
+                        <p class="text-sm text-gray-500 mt-2 font-medium">${item.descricao}</p>
+                    </div>
+                    <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <span class="font-black text-2xl text-gray-800">${fmtCurrency(finalPrice)}</span>
+                        <button onclick="buyItem('${item.id}', ${finalPrice})" 
+                                ${!canAfford ? 'disabled' : ''}
+                                class="${canAfford ? 'bg-ligra-main hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} px-6 py-3 rounded-xl font-bold transition-all shadow-md btn-press">
+                            ${t('buy')}
+                        </button>
+                    </div>
+                </div>
+                `;
+            }).join('')}
+        </div>
+    </div>
+    `;
+}
+
+async function buyItem(itemId, price) {
+    const user = appState.currentUser;
+    if (user.saldo < price) {
+        toast(t('no_funds'), 'error');
+        return;
+    }
+    
+    showLoading();
+    const newSaldo = user.saldo - price;
+    
+    // DB Transactions
+    await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', user.id);
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: user.id, tipo: 'debito', valor: price, descricao: 'Store purchase request' }]);
+    await supabaseClient.from('solicitacoes_item').insert([{ id: generateId(), aluno_id: user.id, item_id: itemId, preco_pago: price, status: 'pendente' }]);
+
+    toast(t('success_buy'));
+    await refreshData();
+    hideLoading();
+    render();
+}
+
+function renderStudentItems() {
+    const uId = appState.currentUser.id;
+    const myReqs = appState.solicitacoes;
+    
+    const pendentes = myReqs.filter(s => s.status === 'pendente');
+    const aprovados = myReqs.filter(s => s.status === 'aprovado');
+
+    const renderCard = (s, statusTag) => {
+        const item = appState.loja.find(i => i.id === s.item_id);
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center"><i data-lucide="package" class="w-5 h-5 text-gray-400"></i></div>
+                    <div>
+                        <p class="font-bold text-gray-800">${item?.nome || 'Item removed'}</p>
+                        <p class="text-xs text-gray-400">${fmtCurrency(s.preco_pago)}</p>
+                    </div>
+                </div>
+                ${statusTag}
+            </div>
+        `;
+    };
+
+    return `
+    <div class="fade-in space-y-8">
+        <div>
+            <h2 class="text-2xl font-black text-gray-800 mb-4">${t('pending_items')}</h2>
+            <div class="space-y-3">
+                ${pendentes.length === 0 ? '<p class="text-gray-400 italic">No pending items.</p>' : ''}
+                ${pendentes.map(s => renderCard(s, `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold uppercase">Pending</span>`)).join('')}
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-2xl font-black text-gray-800 mb-4">${t('acquired_items')}</h2>
+            <div class="space-y-3">
+                ${aprovados.length === 0 ? '<p class="text-gray-400 italic">No items acquired yet.</p>' : ''}
+                ${aprovados.map(s => renderCard(s, `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold uppercase"><i data-lucide="check" class="w-3 h-3 inline"></i> Acquired</span>`)).join('')}
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+function renderStudentHistory() {
+    const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+
+    return `
+    <div class="fade-in space-y-6">
+        <h1 class="text-3xl font-black text-gray-800">${t('nav_history')}</h1>
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Type</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Description</th>
+                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Value</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">No transactions</td></tr>' : ''}
+                    ${history.map(tr => {
+                        const isCredito = tr.tipo === 'credito';
+                        return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="p-4">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                    <i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
+                                    ${isCredito ? 'EARN' : 'SPEND'}
+                                </span>
+                            </td>
+                            <td class="p-4 font-bold text-gray-600">${tr.descricao}</td>
+                            <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">
+                                ${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}
+                            </td>
+                        </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    `;
 }
 
 // ============================================
-// MODAIS
+// 8. MODALS (TEACHER DB ACTIONS)
 // ============================================
-function modalNovaTurma() {
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-800 mb-4">Nova Turma</h3>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Nome da Turma</label>
-        <input type="text" id="turmaNome" placeholder="Ex: 3º Ano A" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Descrição (opcional)</label>
-        <input type="text" id="turmaDesc" placeholder="Ex: Turma do período da manhã" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="closeModal(this.closest('.modal-overlay'))" class="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-all">Cancelar</button>
-        <button onclick="handleCriarTurma()" class="flex-1 py-3 rounded-xl bg-[#89C2F5] text-white font-bold hover:bg-[#5B8FB3] transition-all btn-press">Criar</button>
-      </div>
-    </div>
-  `);
+function modalAddStudent() {
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">${t('add_student')}</h3>
+        <div class="space-y-4">
+            <input type="text" id="nAlunoNome" placeholder="Name" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+            <input type="email" id="nAlunoEmail" placeholder="email@portalsesisp.org.br" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6">
+            <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button>
+            <button onclick="execAddStudent()" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl">${t('confirm')}</button>
+        </div>
+    `);
 }
 
-async function handleCriarTurma() {
-  const nome = $('#turmaNome').value.trim();
-  const desc = $('#turmaDesc').value.trim();
-  if (!nome) { toast('Informe o nome da turma', 'warning'); return; }
-  await criarTurma(nome, desc);
-  closeModal($('.modal-overlay'));
-  renderApp();
+async function execAddStudent() {
+    const nome = $('#nAlunoNome').value.trim();
+    const email = $('#nAlunoEmail').value.trim();
+    if(!email.endsWith('@portalsesisp.org.br')) { toast(t('invalid_email'), 'error'); return; }
+    
+    showLoading();
+    const { error } = await supabaseClient.from('users').insert([{ id: generateId(), role: 'student', nome, email, password: '123', saldo: 0 }]);
+    
+    if (error) { toast('Email already exists or error', 'error'); }
+    else { toast('Student added!'); }
+    
+    closeModal();
+    await refreshData();
+    hideLoading();
+    render();
 }
 
-function modalNovoAluno() {
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-800 mb-4">Novo Aluno</h3>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
-        <input type="text" id="alunoNome" placeholder="Nome do aluno" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Turma</label>
-        <select id="alunoTurma" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-          <option value="">Sem turma</option>
-          ${appState.turmas.map(t => `<option value="${t.id}">${t.nome}</option>`).join('')}
-        </select>
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Matrícula (opcional)</label>
-        <input type="text" id="alunoMatricula" placeholder="Número de matrícula" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Email (opcional)</label>
-        <input type="email" id="alunoEmail" placeholder="email@escola.edu.br" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Saldo Inicial</label>
-        <input type="number" id="alunoSaldo" value="0" min="0" step="0.01" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="closeModal(this.closest('.modal-overlay'))" class="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-all">Cancelar</button>
-        <button onclick="handleCriarAluno()" class="flex-1 py-3 rounded-xl bg-[#89C2F5] text-white font-bold hover:bg-[#5B8FB3] transition-all btn-press">Cadastrar</button>
-      </div>
-    </div>
-  `);
+async function modalResetPass(id) {
+    showLoading();
+    await supabaseClient.from('users').update({ password: '123' }).eq('id', id);
+    toast('Password reset to: 123');
+    hideLoading();
 }
 
-async function handleCriarAluno() {
-  const nome = $('#alunoNome').value.trim();
-  const turmaId = $('#alunoTurma').value || null;
-  const matricula = $('#alunoMatricula').value.trim();
-  const email = $('#alunoEmail').value.trim();
-  const saldo = parseFloat($('#alunoSaldo').value) || 0;
-  if (!nome) { toast('Informe o nome do aluno', 'warning'); return; }
-  await criarAluno(nome, turmaId, matricula, email, saldo);
-  closeModal($('.modal-overlay'));
-  renderApp();
+function modalFundos(id, tipo) {
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">${tipo === 'credito' ? t('add_funds') : t('sub_funds')}</h3>
+        <div class="space-y-4">
+            <input type="number" id="fValor" placeholder="${t('amount')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold text-lg">
+            <input type="text" id="fDesc" placeholder="${t('reason')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6">
+            <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button>
+            <button onclick="execFundos('${id}', '${tipo}')" class="flex-1 py-3 ${tipo === 'credito' ? 'bg-green-500' : 'bg-red-500'} text-white font-bold rounded-xl">${t('confirm')}</button>
+        </div>
+    `);
 }
 
-function modalCreditar(alunoId) {
-  const aluno = appState.alunos.find(a => a.id === alunoId);
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-800 mb-1">Creditar</h3>
-      <p class="text-sm text-gray-500 mb-4">${aluno.nome} - Saldo: ${fmtCurrency(aluno.saldo || 0)}</p>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Valor</label>
-        <input type="number" id="creditoValor" min="0.01" step="0.01" placeholder="0,00" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-        <input type="text" id="creditoDesc" placeholder="Ex: Participação em aula" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="closeModal(this.closest('.modal-overlay'))" class="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-all">Cancelar</button>
-        <button onclick="handleCreditar('${alunoId}')" class="flex-1 py-3 rounded-xl bg-green-500 text-white font-bold hover:bg-green-600 transition-all btn-press">Creditar</button>
-      </div>
-    </div>
-  `);
+async function execFundos(id, tipo) {
+    const v = parseFloat($('#fValor').value);
+    const d = $('#fDesc').value || 'Manual trans.';
+    if(!v || v <= 0) return;
+    
+    showLoading();
+    const u = appState.users.find(x => x.id === id);
+    let newSaldo = u.saldo;
+
+    if(tipo === 'credito') newSaldo += v;
+    else {
+        if (u.saldo < v) { hideLoading(); toast(t('no_funds'), 'error'); return; }
+        newSaldo -= v;
+    }
+    
+    await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', id);
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: id, tipo, valor: v, descricao: d }]);
+    
+    toast('Success!'); 
+    closeModal();
+    await refreshData();
+    hideLoading();
+    render();
 }
 
-async function handleCreditar(alunoId) {
-  const valor = parseFloat($('#creditoValor').value);
-  const desc = $('#creditoDesc').value.trim();
-  if (!valor || valor <= 0) { toast('Informe um valor válido', 'warning'); return; }
-  await criarTransacao(alunoId, 'credito', valor, desc || 'Crédito');
-  closeModal($('.modal-overlay'));
-  renderApp();
+function modalAddItem() {
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">${t('add_item')}</h3>
+        <div class="space-y-4">
+            <input type="text" id="iNome" placeholder="Item Name" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="iDesc" placeholder="Description" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="number" id="iPreco" placeholder="${t('base_price')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6">
+            <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button>
+            <button onclick="execAddItem()" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl">${t('confirm')}</button>
+        </div>
+    `);
 }
 
-function modalDebitar(alunoId) {
-  const aluno = appState.alunos.find(a => a.id === alunoId);
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-800 mb-1">Debitar</h3>
-      <p class="text-sm text-gray-500 mb-4">${aluno.nome} - Saldo: ${fmtCurrency(aluno.saldo || 0)}</p>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Valor</label>
-        <input type="number" id="debitoValor" min="0.01" step="0.01" placeholder="0,00" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-        <input type="text" id="debitoDesc" placeholder="Ex: Compra na lojinha" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="closeModal(this.closest('.modal-overlay'))" class="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-all">Cancelar</button>
-        <button onclick="handleDebitar('${alunoId}')" class="flex-1 py-3 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 transition-all btn-press">Debitar</button>
-      </div>
-    </div>
-  `);
+async function execAddItem() {
+    const nome = $('#iNome').value;
+    const desc = $('#iDesc').value;
+    const preco = parseFloat($('#iPreco').value);
+    if(!nome || !preco) return;
+    
+    showLoading();
+    await supabaseClient.from('loja').insert([{ id: generateId(), nome, descricao: desc, preco_base: preco }]);
+    
+    toast('Item added!'); 
+    closeModal();
+    await refreshData();
+    hideLoading();
+    render();
 }
 
-async function handleDebitar(alunoId) {
-  const valor = parseFloat($('#debitoValor').value);
-  const desc = $('#debitoDesc').value.trim();
-  if (!valor || valor <= 0) { toast('Informe um valor válido', 'warning'); return; }
-  await criarTransacao(alunoId, 'debito', valor, desc || 'Débito');
-  closeModal($('.modal-overlay'));
-  renderApp();
-}
-
-function modalNovaTransacao() {
-  showModal(`
-    <div class="p-6">
-      <h3 class="text-xl font-bold text-gray-800 mb-4">Nova Transação</h3>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Aluno</label>
-        <select id="transAluno" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-          <option value="">Selecione...</option>
-          ${appState.alunos.map(a => `<option value="${a.id}">${a.nome}</option>`).join('')}
-        </select>
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-        <select id="transTipo" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-          <option value="credito">Crédito (+)</option>
-          <option value="debito">Débito (-)</option>
-        </select>
-      </div>
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Valor</label>
-        <input type="number" id="transValor" min="0.01" step="0.01" placeholder="0,00" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="mb-6">
-        <label class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-        <input type="text" id="transDesc" placeholder="Motivo da transação" class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 bg-gray-50 focus:border-[#89C2F5] transition-all">
-      </div>
-      <div class="flex gap-3">
-        <button onclick="closeModal(this.closest('.modal-overlay'))" class="flex-1 py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-all">Cancelar</button>
-        <button onclick="handleNovaTransacao()" class="flex-1 py-3 rounded-xl bg-[#89C2F5] text-white font-bold hover:bg-[#5B8FB3] transition-all btn-press">Confirmar</button>
-      </div>
-    </div>
-  `);
-}
-
-async function handleNovaTransacao() {
-  const alunoId = $('#transAluno').value;
-  const tipo = $('#transTipo').value;
-  const valor = parseFloat($('#transValor').value);
-  const desc = $('#transDesc').value.trim();
-  if (!alunoId) { toast('Selecione um aluno', 'warning'); return; }
-  if (!valor || valor <= 0) { toast('Informe um valor válido', 'warning'); return; }
-  await criarTransacao(alunoId, tipo, valor, desc);
-  closeModal($('.modal-overlay'));
-  renderApp();
-}
-
-// ============================================
-// INICIALIZAÇÃO
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-  initAuth();
-});
+// Init (Render Login Screen)
+render();
 </script>
 </body>
 </html>
