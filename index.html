@@ -1,59 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LigraBank</title>
-    
-    <!-- Fonts -->
+    <!-- LigraBank Base Carregada - Parceiro de Programação -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-
-    <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Adicionamos a biblioteca Chart.js para os gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: { sans: ['Nunito', 'sans-serif'] },
-                    colors: {
-                        ligra: { light: '#89C2F5', main: '#3B82F6', dark: '#1E3A8A', accent: '#FBBF24' }
-                    }
+                    colors: { ligra: { light: '#89C2F5', main: '#3B82F6', dark: '#1E3A8A', accent: '#FBBF24' } }
                 }
             }
         }
     </script>
-
     <style>
         body { background-color: #F3F4F6; }
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         .btn-press:active { transform: scale(0.97); }
         .modal-overlay { background-color: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); }
-        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-        
-        /* Spinner Loader */
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3B82F6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="text-gray-800 h-screen flex overflow-hidden selection:bg-ligra-light selection:text-white">
 
-    <!-- Container Root -->
     <div id="root" class="w-full h-full flex"></div>
     <div id="modal-container"></div>
     <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
     <div id="global-loader" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
         <div class="flex flex-col items-center gap-3">
             <div class="loader w-10 h-10 border-4"></div>
-            <p class="font-bold text-ligra-main animate-pulse">Loading...</p>
+            <p class="font-bold text-ligra-main animate-pulse">A carregar...</p>
         </div>
     </div>
 
@@ -64,183 +53,65 @@
 const SUPABASE_URL = 'https://dxgofzbjpabmuptqsscg.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_vbKvJDE0BiTtRxOu6bhW0A_AdAJDEvr';
 
-// Corrigido: Usar 'supabaseClient' em vez de 'supabase' para evitar conflito com a biblioteca global injetada pelo CDN.
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const generateId = () => Math.random().toString(36).substr(2, 12);
 
 let appState = {
-    lang: 'en',
+    lang: 'pt', // Mudei o default para português conforme o público
     currentUser: null,
     currentView: 'dashboard',
     inflationRate: 1.0, 
-    
-    // Arrays will be populated from Supabase
+    filtroTurma: 'todas',
     users: [],
     transacoes: [],
     loja: [],
-    solicitacoes: []
+    solicitacoes: [],
+    inflacaoHistorico: [] // Novo: Espaço para guardar o histórico do gráfico
 };
 
-// ============================================
-// 2. DICTIONARY (TRANSLATIONS)
-// ============================================
 const translations = {
     en: {
         slogan: "Where your investment yields a little more",
-        login_title: "Welcome to LigraBank",
-        email: "User / Email",
-        password: "Password",
-        login_btn: "Login",
-        lang_toggle: "Mudar para Português",
-        
-        // Menus
-        nav_dashboard: "Dashboard",
-        nav_students: "Students",
-        nav_store: "Store Mgmt",
-        nav_requests: "Requests",
-        nav_mystore: "Store",
-        nav_myitems: "My Items",
-        nav_history: "History",
-        logout: "Logout",
-
-        // Teacher Dashboard
-        total_economy: "Total Economy",
-        inflation_ctrl: "Economy Control (Inflation/Deflation)",
-        inflation_desc: "Adjust the prices in the store. Values above 1.0 make items more expensive. Values below 1.0 make them cheaper.",
-        current_rate: "Current Rate",
-        update_economy: "Update Economy",
-
-        // Students Management
-        add_student: "Add Student",
-        import_csv: "Import CSV",
-        student_list: "Student List",
-        balance: "Balance",
-        add_funds: "Add Funds",
-        sub_funds: "Charge",
-        reset_pass: "Reset Pass",
-        
-        // Store
-        add_item: "Add Item",
-        base_price: "Base Price",
-        store_catalog: "Store Catalog",
-        buy: "Buy",
-        price: "Price",
-        
-        // Requests
-        pending_req: "Pending Requests",
-        approve: "Approve",
-        deny: "Deny",
-
-        // Student Dashboard
-        hello: "Hello",
-        my_balance: "My Balance",
-        change_pass: "Change My Password",
-        new_pass: "New Password",
-        save: "Save",
-        
-        // Student Items
-        acquired_items: "My Acquired Items",
-        pending_items: "My Pending Requests",
-
-        // Modals & Msgs
-        confirm: "Confirm",
-        cancel: "Cancel",
-        reason: "Reason / Description",
-        amount: "Amount",
-        success_buy: "Request sent to teacher!",
-        no_funds: "Not enough funds!",
-        invalid_email: "Student email must end with @portalsesisp.org.br"
+        login_title: "Welcome to LigraBank", email: "User / Email", password: "Password", login_btn: "Login", lang_toggle: "Mudar para Português",
+        nav_dashboard: "Dashboard", nav_students: "Students", nav_store: "Store Mgmt", nav_requests: "Requests", nav_mystore: "Store", nav_myitems: "My Items", nav_history: "History", logout: "Logout",
+        total_economy: "Total Economy", inflation_ctrl: "Economy Control (Inflation/Deflation)", inflation_desc: "Adjust the prices in the store.", current_rate: "Current Rate", update_economy: "Update Economy",
+        add_student: "Add Student", import_csv: "Import CSV", student_list: "Student List", balance: "Balance", add_funds: "Add Funds", sub_funds: "Charge", reset_pass: "Reset Pass",
+        add_item: "Add Item", base_price: "Base Price", store_catalog: "Store Catalog", buy: "Buy", price: "Price",
+        pending_req: "Pending Requests", approve: "Approve", deny: "Deny",
+        hello: "Hello", my_balance: "My Balance", change_pass: "Change My Password", new_pass: "New Password", save: "Save",
+        acquired_items: "My Acquired Items", pending_items: "My Pending Requests",
+        confirm: "Confirm", cancel: "Cancel", reason: "Reason / Description", amount: "Amount", success_buy: "Request sent to teacher!", no_funds: "Not enough funds!", invalid_email: "Student email must end with @portalsesisp.org.br"
     },
     pt: {
-        slogan: "Onde seu investimento rende um pouco mais",
-        login_title: "Bem-vindo ao LigraBank",
-        email: "Usuário / E-mail",
-        password: "Senha (Password)",
-        login_btn: "Entrar",
-        lang_toggle: "Switch to English",
-        
-        nav_dashboard: "Painel",
-        nav_students: "Alunos",
-        nav_store: "Gerenciar Loja",
-        nav_requests: "Solicitações",
-        nav_mystore: "Lojinha",
-        nav_myitems: "Meus Itens",
-        nav_history: "Histórico",
-        logout: "Sair",
-
-        total_economy: "Economia Total",
-        inflation_ctrl: "Controle Econômico (Inflação/Deflação)",
-        inflation_desc: "Ajuste os preços da loja. Valores acima de 1.0 deixam os itens mais caros. Abaixo de 1.0, mais baratos.",
-        current_rate: "Taxa Atual",
-        update_economy: "Atualizar Economia",
-
-        add_student: "Novo Aluno",
-        import_csv: "Importar CSV",
-        student_list: "Lista de Alunos",
-        balance: "Saldo",
-        add_funds: "Creditar",
-        sub_funds: "Debitar",
-        reset_pass: "Resetar Senha",
-
-        add_item: "Novo Item",
-        base_price: "Preço Base",
-        store_catalog: "Catálogo da Loja",
-        buy: "Comprar",
-        price: "Preço",
-
-        pending_req: "Solicitações Pendentes",
-        approve: "Aprovar",
-        deny: "Rejeitar",
-
-        hello: "Olá",
-        my_balance: "Meu Saldo",
-        change_pass: "Mudar Minha Senha",
-        new_pass: "Nova Senha",
-        save: "Salvar",
-
-        acquired_items: "Meus Itens Adquiridos",
-        pending_items: "Minhas Solicitações Pendentes",
-
-        confirm: "Confirmar",
-        cancel: "Cancelar",
-        reason: "Motivo / Descrição",
-        amount: "Valor",
-        success_buy: "Solicitação enviada ao professor!",
-        no_funds: "Saldo insuficiente!",
-        invalid_email: "O e-mail do aluno deve terminar com @portalsesisp.org.br"
+        slogan: "Onde o seu investimento rende um pouco mais",
+        login_title: "Bem-vindo ao LigraBank", email: "Usuário / E-mail", password: "Senha", login_btn: "Entrar", lang_toggle: "Switch to English",
+        nav_dashboard: "Painel", nav_students: "Alunos", nav_store: "Gerenciar Loja", nav_requests: "Solicitações", nav_mystore: "Lojinha", nav_myitems: "Meus Itens", nav_history: "Histórico", logout: "Sair",
+        total_economy: "Economia Total", inflation_ctrl: "Controle Econômico", inflation_desc: "Ajuste os preços da loja.", current_rate: "Taxa Atual", update_economy: "Atualizar Economia",
+        add_student: "Novo Aluno", import_csv: "Importar CSV", student_list: "Lista de Alunos", balance: "Saldo", add_funds: "Creditar", sub_funds: "Debitar", reset_pass: "Repor Senha",
+        add_item: "Novo Item", base_price: "Preço Base", store_catalog: "Catálogo da Loja", buy: "Comprar", price: "Preço",
+        pending_req: "Solicitações Pendentes", approve: "Aprovar", deny: "Rejeitar",
+        hello: "Olá", my_balance: "Meu Saldo", change_pass: "Mudar Minha Senha", new_pass: "Nova Senha", save: "Salvar",
+        acquired_items: "Meus Itens Adquiridos", pending_items: "Minhas Solicitações Pendentes",
+        confirm: "Confirmar", cancel: "Cancelar", reason: "Motivo / Descrição", amount: "Valor", success_buy: "Solicitação enviada ao professor!", no_funds: "Saldo insuficiente!", invalid_email: "O e-mail deve terminar com @portalsesisp.org.br"
     }
 };
 
 const t = (key) => translations[appState.lang][key] || key;
-
-// ============================================
-// 3. UTILITIES
-// ============================================
 const $ = selector => document.querySelector(selector);
 
 function showLoading() { $('#global-loader').classList.remove('hidden'); }
 function hideLoading() { $('#global-loader').classList.add('hidden'); }
-
-function fmtCurrency(valor) {
-    return `LM$ ${parseFloat(valor || 0).toFixed(2)}`;
-}
-
-function toggleLang() {
-    appState.lang = appState.lang === 'en' ? 'pt' : 'en';
-    render();
-}
-
+function fmtCurrency(valor) { return `LM$ ${parseFloat(valor || 0).toFixed(2)}`; }
+function toggleLang() { appState.lang = appState.lang === 'en' ? 'pt' : 'en'; render(); }
 function toast(msg, type = 'success') {
     const container = $('#toast-container');
     const toast = document.createElement('div');
-    const bg = type === 'success' ? 'bg-green-500' : 'bg-red-500';
-    toast.className = `${bg} text-white px-6 py-3 rounded-lg shadow-lg font-bold fade-in`;
+    toast.className = `${type === 'success' ? 'bg-green-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg font-bold fade-in`;
     toast.innerText = msg;
     container.appendChild(toast);
     setTimeout(() => { toast.remove(); }, 3000);
 }
-
 function showModal(content) {
     $('#modal-container').innerHTML = `
         <div class="fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4 fade-in" onclick="closeModal()">
@@ -251,16 +122,11 @@ function showModal(content) {
     `;
     lucide.createIcons();
 }
-
 function closeModal() { $('#modal-container').innerHTML = ''; }
-
-function changeView(view) {
-    appState.currentView = view;
-    render();
-}
+function changeView(view) { appState.currentView = view; render(); }
 
 // ============================================
-// 4. CORE LOGIC (AUTH & DB FETCH)
+// 2. AUTH & DB FETCH
 // ============================================
 async function handleLogin(e) {
     e.preventDefault();
@@ -268,32 +134,29 @@ async function handleLogin(e) {
     const pass = $('#loginPass').value;
     
     showLoading();
-    // Procurar user na tabela customizada 'users'
-    const { data: user, error } = await supabaseClient
+    const { data: users, error } = await supabaseClient
         .from('users')
         .select('*')
         .eq('email', email)
         .eq('password', pass)
-        .single();
+        .limit(1);
+
+    const user = users && users.length > 0 ? users[0] : null;
 
     if (error || !user) {
         hideLoading();
-        toast('Invalid credentials / Credenciais inválidas', 'error');
+        toast('Credenciais inválidas', 'error');
         return;
     }
 
     appState.currentUser = user;
     appState.currentView = 'dashboard';
-    
     await refreshData();
     hideLoading();
     render();
 }
 
-function handleLogout() {
-    appState.currentUser = null;
-    render();
-}
+function handleLogout() { appState.currentUser = null; render(); }
 
 async function refreshData() {
     if (!appState.currentUser) return;
@@ -301,9 +164,19 @@ async function refreshData() {
     const role = appState.currentUser.role;
 
     try {
-        // Puxar a loja (ambos veem)
         const { data: loja } = await supabaseClient.from('loja').select('*');
         appState.loja = loja || [];
+
+        // NOVO: Tentar buscar histórico de inflação do banco
+        const { data: hist, error: histErr } = await supabaseClient.from('inflacao_historico').select('*').order('created_at', { ascending: true });
+        if (!histErr && hist && hist.length > 0) {
+            appState.inflacaoHistorico = hist;
+            appState.inflationRate = hist[hist.length - 1].taxa;
+        } else if (appState.inflacaoHistorico.length === 0) {
+            // Rede de segurança: Se a tabela não existir, usa um valor padrão inicial na memória
+            appState.inflacaoHistorico = [{ taxa: 1.0, created_at: new Date().toISOString() }];
+            appState.inflationRate = 1.0;
+        }
 
         if (role === 'teacher') {
             const { data: users } = await supabaseClient.from('users').select('*').eq('role', 'student');
@@ -315,9 +188,8 @@ async function refreshData() {
             const { data: solicitacoes } = await supabaseClient.from('solicitacoes_item').select('*');
             appState.solicitacoes = solicitacoes || [];
         } else {
-            // Atualizar os dados do próprio aluno
-            const { data: user } = await supabaseClient.from('users').select('saldo').eq('id', uId).single();
-            if (user) appState.currentUser.saldo = user.saldo;
+            const { data: userData } = await supabaseClient.from('users').select('saldo').eq('id', uId).limit(1);
+            if (userData && userData.length > 0) appState.currentUser.saldo = userData[0].saldo;
 
             const { data: transacoes } = await supabaseClient.from('transacoes').select('*').eq('aluno_id', uId);
             appState.transacoes = transacoes || [];
@@ -326,16 +198,13 @@ async function refreshData() {
             appState.solicitacoes = solicitacoes || [];
         }
     } catch (err) {
-        toast('Failed to load data', 'error');
+        toast('Falha ao carregar dados', 'error');
         console.error(err);
     }
 }
 
 // ============================================
-// 5. RENDER FUNCTIONS
-// ============================================
-// ============================================
-// 5.1. AJUSTE DO LAYOUT GERAL E MENU MOBILE
+// 3. LAYOUT GERAL & MENU
 // ============================================
 function render() {
     const root = $('#root');
@@ -345,12 +214,12 @@ function render() {
         const role = appState.currentUser.role;
         const view = appState.currentView;
         
-        // Opções do menu para o telemóvel (Dropdown)
         const mobileOptions = role === 'teacher' ? `
             <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
             <option value="students" ${view === 'students' ? 'selected' : ''}>${t('nav_students')}</option>
             <option value="store" ${view === 'store' ? 'selected' : ''}>${t('nav_store')}</option>
             <option value="requests" ${view === 'requests' ? 'selected' : ''}>${t('nav_requests')}</option>
+            <option value="transactions" ${view === 'transactions' ? 'selected' : ''}>Log / Extrato</option>
         ` : `
             <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
             <option value="mystore" ${view === 'mystore' ? 'selected' : ''}>${t('nav_mystore')}</option>
@@ -361,19 +230,14 @@ function render() {
         root.innerHTML = `
             ${renderSidebar()}
             <main class="flex-1 flex flex-col h-full bg-gray-50 overflow-y-auto w-full overflow-x-hidden">
-                
                 <header class="md:hidden bg-white p-4 border-b border-gray-200 flex justify-between items-center shadow-sm sticky top-0 z-20">
                     <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-ligra-main rounded-lg flex items-center justify-center text-white">
-                            <i data-lucide="piggy-bank" class="w-5 h-5"></i>
-                        </div>
+                        <div class="w-8 h-8 bg-ligra-main rounded-lg flex items-center justify-center text-white"><i data-lucide="piggy-bank" class="w-5 h-5"></i></div>
                         <span class="font-black text-lg text-ligra-dark">LigraBank</span>
                     </div>
                     <div class="flex gap-2">
                         <button onclick="toggleLang()" class="p-2 text-gray-500 hover:text-ligra-main"><i data-lucide="globe" class="w-5 h-5"></i></button>
-                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark">
-                            ${mobileOptions}
-                        </select>
+                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark">${mobileOptions}</select>
                     </div>
                 </header>
 
@@ -383,45 +247,69 @@ function render() {
                     </button>
                     <div class="font-black text-ligra-dark">${appState.currentUser.nome}</div>
                 </header>
-                
-                <div class="p-4 md:p-6 max-w-5xl mx-auto w-full">
-                    ${renderMainContent()}
-                </div>
+                <div class="p-4 md:p-6 max-w-5xl mx-auto w-full">${renderMainContent()}</div>
             </main>
         `;
     }
     lucide.createIcons();
+    // NOVO: Renderizar o gráfico logo após atualizar o HTML
+    renderCharts();
+}
+
+// NOVO: Função responsável por desenhar o gráfico
+function renderCharts() {
+    const ctx = document.getElementById('inflationChart');
+    if (!ctx) return; // Se não houver canvas (ex: noutra página), não faz nada
+    
+    // Limpar gráfico anterior se existir (previne sobreposições visuais)
+    if (window.inflationChartInstance) {
+        window.inflationChartInstance.destroy();
+    }
+
+    const labels = appState.inflacaoHistorico.map(h => {
+        const d = new Date(h.created_at);
+        return `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    });
+    const data = appState.inflacaoHistorico.map(h => h.taxa);
+    
+    window.inflationChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Taxa de Inflação',
+                data: data,
+                borderColor: '#8B5CF6', // Roxo (Tailwind purple-500)
+                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                borderWidth: 3,
+                tension: 0.3, // Suaviza a linha (curva)
+                fill: true,
+                pointBackgroundColor: '#8B5CF6',
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: false, min: 0.5, max: 2.5 } }
+        }
+    });
 }
 
 function renderLoginScreen() {
     return `
     <div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-ligra-light p-4">
-        <button onclick="toggleLang()" class="absolute top-4 right-4 text-sm font-bold text-gray-600 hover:text-ligra-dark flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow">
-            <i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}
-        </button>
-        
+        <button onclick="toggleLang()" class="absolute top-4 right-4 text-sm font-bold text-gray-600 hover:text-ligra-dark flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow"><i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}</button>
         <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md text-center">
-            <div class="w-20 h-20 bg-ligra-main text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4">
-                <i data-lucide="piggy-bank" class="w-12 h-12"></i>
-            </div>
+            <div class="w-20 h-20 bg-ligra-main text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4"><i data-lucide="piggy-bank" class="w-12 h-12"></i></div>
             <h1 class="text-3xl font-black text-ligra-dark">LigraBank</h1>
             <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1 mb-8">"${t('slogan')}"</p>
-            
-            <h2 class="text-xl font-bold text-gray-800 mb-6">${t('login_title')}</h2>
-            
             <form onsubmit="handleLogin(event)" class="space-y-4">
-                <div>
-                    <input type="text" id="loginEmail" placeholder="${t('email')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
-                </div>
-                <div>
-                    <input type="password" id="loginPass" placeholder="${t('password')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
-                </div>
-                <button type="submit" class="w-full py-3 rounded-xl bg-ligra-main text-white font-black text-lg shadow-md hover:bg-blue-600 transition-all btn-press">
-                    ${t('login_btn')}
-                </button>
+                <input type="text" id="loginEmail" placeholder="${t('email')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                <input type="password" id="loginPass" placeholder="${t('password')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                <button type="submit" class="w-full py-3 rounded-xl bg-ligra-main text-white font-black text-lg shadow-md hover:bg-blue-600 btn-press">${t('login_btn')}</button>
             </form>
-            
-            <p class="mt-6 text-xs text-gray-400">Please make sure to add your teacher account<br>via Supabase dashboard first.</p>
         </div>
     </div>
     `;
@@ -429,43 +317,30 @@ function renderLoginScreen() {
 
 function renderSidebar() {
     const role = appState.currentUser.role;
-    let links = '';
-    
-    if (role === 'teacher') {
-        links = `
-            ${navItem('dashboard', t('nav_dashboard'), 'layout-dashboard')}
-            ${navItem('students', t('nav_students'), 'users')}
-            ${navItem('store', t('nav_store'), 'store')}
-            ${navItem('requests', t('nav_requests'), 'shopping-bag')}
-        `;
-    } else {
-        links = `
-            ${navItem('dashboard', t('nav_dashboard'), 'user')}
-            ${navItem('mystore', t('nav_mystore'), 'shopping-cart')}
-            ${navItem('myitems', t('nav_myitems'), 'package')}
-            ${navItem('history', t('nav_history'), 'clock')}
-        `;
-    }
-
-    // Adicionado 'hidden md:flex' para esconder o menu lateral no telemóvel
+    let links = role === 'teacher' ? `
+        ${navItem('dashboard', t('nav_dashboard'), 'layout-dashboard')}
+        ${navItem('students', t('nav_students'), 'users')}
+        ${navItem('store', t('nav_store'), 'store')}
+        ${navItem('requests', t('nav_requests'), 'shopping-bag')}
+        ${navItem('transactions', 'Log / Extrato', 'list')}
+    ` : `
+        ${navItem('dashboard', t('nav_dashboard'), 'user')}
+        ${navItem('mystore', t('nav_mystore'), 'shopping-cart')}
+        ${navItem('myitems', t('nav_myitems'), 'package')}
+        ${navItem('history', t('nav_history'), 'clock')}
+    `;
     return `
     <aside class="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shadow-sm">
         <div class="p-6 border-b border-gray-100 flex items-center gap-3">
-            <div class="w-10 h-10 bg-ligra-main rounded-xl flex items-center justify-center text-white">
-                <i data-lucide="piggy-bank" class="w-6 h-6"></i>
-            </div>
+            <div class="w-10 h-10 bg-ligra-main rounded-xl flex items-center justify-center text-white"><i data-lucide="piggy-bank" class="w-6 h-6"></i></div>
             <div>
                 <h1 class="font-black text-xl text-ligra-dark tracking-tight">LigraBank</h1>
                 <p class="text-[10px] text-gray-400 font-bold uppercase">${role}</p>
             </div>
         </div>
-        <nav class="flex-1 p-4 space-y-2">
-            ${links}
-        </nav>
+        <nav class="flex-1 p-4 space-y-2">${links}</nav>
         <div class="p-4 border-t border-gray-100">
-            <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-3 text-red-500 rounded-xl hover:bg-red-50 font-bold transition-colors">
-                <i data-lucide="log-out" class="w-5 h-5"></i> ${t('logout')}
-            </button>
+            <button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-3 text-red-500 rounded-xl hover:bg-red-50 font-bold transition-colors"><i data-lucide="log-out" class="w-5 h-5"></i> ${t('logout')}</button>
         </div>
     </aside>
     `;
@@ -473,9 +348,8 @@ function renderSidebar() {
 
 function navItem(view, label, icon) {
     const isActive = appState.currentView === view;
-    const activeClass = isActive ? 'bg-blue-50 text-ligra-main' : 'text-gray-500 hover:bg-gray-50';
     return `
-        <button onclick="changeView('${view}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${activeClass}">
+        <button onclick="changeView('${view}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${isActive ? 'bg-blue-50 text-ligra-main' : 'text-gray-500 hover:bg-gray-50'}">
             <i data-lucide="${icon}" class="w-5 h-5"></i> ${label}
         </button>
     `;
@@ -484,12 +358,12 @@ function navItem(view, label, icon) {
 function renderMainContent() {
     const view = appState.currentView;
     const role = appState.currentUser.role;
-    
     if (role === 'teacher') {
         if (view === 'dashboard') return renderTeacherDashboard();
         if (view === 'students') return renderTeacherStudents();
         if (view === 'store') return renderTeacherStore();
         if (view === 'requests') return renderTeacherRequests();
+        if (view === 'transactions') return renderTeacherTransactions();
     } else {
         if (view === 'dashboard') return renderStudentDashboard();
         if (view === 'mystore') return renderStudentStore();
@@ -500,16 +374,14 @@ function renderMainContent() {
 }
 
 // ============================================
-// 6. TEACHER VIEWS & ACTIONS
+// 4. TEACHER VIEWS & ACTIONS
 // ============================================
 function renderTeacherDashboard() {
     const students = appState.users;
     const totalEco = students.reduce((sum, u) => sum + (u.saldo || 0), 0);
-    
     return `
     <div class="fade-in space-y-6">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
-        
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-ligra-main">
                 <p class="text-sm font-bold text-gray-400 uppercase">${t('total_economy')}</p>
@@ -520,55 +392,61 @@ function renderTeacherDashboard() {
                 <h2 class="text-3xl md:text-4xl font-black text-green-600 mt-2">${students.length}</h2>
             </div>
         </div>
-
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6">
-            <div class="flex items-center gap-3 mb-2">
-                <i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i>
-                <h2 class="text-xl font-black text-gray-800">${t('inflation_ctrl')}</h2>
-            </div>
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
+            <div class="flex items-center gap-3 mb-2"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">${t('inflation_ctrl')}</h2></div>
             <p class="text-sm font-medium text-gray-500 mb-6">${t('inflation_desc')}</p>
-            
             <div class="flex flex-col sm:flex-row items-center gap-4">
-                <div class="flex-1 w-full">
-                    <input type="range" id="inflationSlider" min="0.5" max="2.0" step="0.1" value="${appState.inflationRate}" 
-                        oninput="document.getElementById('infVal').innerText = 'x' + parseFloat(this.value).toFixed(1)"
-                        class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                </div>
-                <div class="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl font-black text-xl" id="infVal">
-                    x${appState.inflationRate.toFixed(1)}
-                </div>
-                <button onclick="updateInflation()" class="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-xl font-bold shadow-md btn-press">
-                    ${t('update_economy')}
-                </button>
+                <div class="flex-1 w-full"><input type="range" id="inflationSlider" min="0.5" max="2.0" step="0.1" value="${appState.inflationRate}" oninput="document.getElementById('infVal').innerText = 'x' + parseFloat(this.value).toFixed(1)" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"></div>
+                <div class="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl font-black text-xl" id="infVal">x${appState.inflationRate.toFixed(1)}</div>
+                <button onclick="updateInflation()" class="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-xl font-bold btn-press">${t('update_economy')}</button>
+            </div>
+            
+            <!-- NOVO: Container do gráfico para o professor -->
+            <div class="mt-8 pt-6 border-t border-gray-100">
+                <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Histórico de Flutuação Económica</h3>
+                <div class="h-64 w-full"><canvas id="inflationChart"></canvas></div>
             </div>
         </div>
-
+        
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full">
-            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <i data-lucide="key" class="w-4 h-4 text-ligra-main"></i> ${t('change_pass')}
-            </h3>
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-ligra-main"></i> ${t('change_pass')}</h3>
             <div class="flex flex-col sm:flex-row gap-2">
                 <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-medium">
-                <button onclick="changeOwnPass()" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto transition-all btn-press">
-                    ${t('save')}
-                </button>
+                <button onclick="changeOwnPass()" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto btn-press">${t('save')}</button>
             </div>
         </div>
     </div>
     `;
 }
 
-function updateInflation() {
-    const val = parseFloat($('#inflationSlider').value);
-    appState.inflationRate = val;
-    toast('Economy updated! (Local state)');
+async function updateInflation() {
+    const novaTaxa = parseFloat($('#inflationSlider').value);
+    if (novaTaxa === appState.inflationRate) return;
+    
+    showLoading();
+    
+    // Tenta salvar o novo valor no Supabase
+    const { error } = await supabaseClient.from('inflacao_historico').insert([{
+        id: generateId(),
+        taxa: novaTaxa
+    }]);
+    
+    if (error) {
+        console.warn("Tabela 'inflacao_historico' não encontrada. A salvar apenas na memória localmente.");
+        appState.inflacaoHistorico.push({ taxa: novaTaxa, created_at: new Date().toISOString() });
+    } else {
+        toast('Economia atualizada e registada!');
+    }
+    
+    appState.inflationRate = novaTaxa;
+    
+    await refreshData();
+    hideLoading();
     render();
 }
 
-// Substitui a tua função renderTeacherStudents (ou renderAlunos) atual por esta ideia:
 function renderTeacherStudents() {
     const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
-    
     let filtrados = appState.users;
     if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
         filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
@@ -578,14 +456,13 @@ function renderTeacherStudents() {
     <div class="fade-in space-y-4 md:space-y-6 w-full">
         <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_students')}</h1>
-            <div class="flex gap-2">
-                <label class="flex-1 text-center justify-center bg-gray-800 hover:bg-gray-900 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2">
-                    <i data-lucide="upload" class="w-4 h-4"></i> ${t('import_csv')}
+            <div class="flex flex-col sm:flex-row gap-2">
+                <label class="text-center justify-center bg-gray-800 hover:bg-gray-900 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2 text-sm">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Sincronizar (Alunos/Saldos CSV)
                     <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
                 </label>
             </div>
         </div>
-        
         <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-start md:items-center">
             <span class="font-bold text-gray-600 text-sm">Filtro de Turma:</span>
             <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full md:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm">
@@ -593,7 +470,6 @@ function renderTeacherStudents() {
                 ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
         </div>
-
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
             <div class="overflow-x-auto w-full rounded-2xl">
                 <table class="w-full text-left whitespace-nowrap min-w-[600px]">
@@ -619,16 +495,9 @@ function renderTeacherStudents() {
                                 <td class="p-4">
                                     <div class="flex justify-center gap-2">
                                         <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-2 md:py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
-                                        
                                         <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-2 md:py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">- ${t('sub_funds')}</button>
-                                        
-                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300" title="${t('reset_pass')}">
-                                            <i data-lucide="key" class="w-4 h-4 md:w-3 md:h-3"></i>
-                                        </button>
-
-                                        <button onclick="excluirAluno('${s.id}')" class="px-3 py-2 md:py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors" title="Excluir Aluno">
-                                            <i data-lucide="trash-2" class="w-4 h-4 md:w-3 md:h-3"></i>
-                                        </button>
+                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300"><i data-lucide="key" class="w-4 h-4 md:w-3 md:h-3"></i></button>
+                                        <button onclick="excluirAluno('${s.id}')" class="px-3 py-2 md:py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors"><i data-lucide="trash-2" class="w-4 h-4 md:w-3 md:h-3"></i></button>
                                     </div>
                                 </td>
                             </tr>
@@ -640,44 +509,21 @@ function renderTeacherStudents() {
     </div>
     `;
 }
-// ============================================
-// FUNÇÃO PARA EXCLUIR ALUNO DO SUPABASE
-// ============================================
-async function excluirAluno(id) {
-    // 1. Confirmação de segurança para evitar exclusões acidentais
-    if (confirm('Tem certeza de que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
-        showLoading();
-        
-        // 2. Apaga o registo do aluno na tabela 'users' do Supabase
-        const { error } = await supabaseClient
-            .from('users')
-            .delete()
-            .eq('id', id);
 
-        if (error) {
-            console.error('Erro ao excluir aluno:', error);
-            toast('Erro ao excluir aluno do Supabase.', 'error');
-        } else {
-            toast('Aluno excluído com sucesso!');
-        }
-
-        // 3. Recarrega os dados atualizados do banco e redesenha a tela
-        await refreshData();
-        hideLoading();
-        render();
-    }
-}
-
+// CARREGAR/SINCRONIZAR ALUNOS E SALDOS (CSV)
 async function handleCSVUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
-
     showLoading();
     const reader = new FileReader();
     reader.onload = async function(e) {
         const text = e.target.result;
         const lines = text.split(/\r?\n/);
+        
         let newUsers = [];
+        let updates = [];
+        let transactions = [];
+        let notFoundSemNome = 0;
 
         if (lines.length > 0) {
             const delimiter = lines[0].includes(';') ? ';' : ',';
@@ -685,263 +531,277 @@ async function handleCSVUpload(event) {
             
             let nomeIdx = headers.indexOf('nome');
             let emailIdx = headers.indexOf('email');
-            
-            // Procura a coluna turma ou grupo
             let turmaIdx = headers.indexOf('turma');
             if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo');
-            
+            let valorIdx = headers.indexOf('valor');
+            if (valorIdx === -1) valorIdx = headers.indexOf('saldo');
+
             if (nomeIdx === -1) nomeIdx = 0;
             if (emailIdx === -1) emailIdx = 1;
 
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue;
-                
                 const cols = lines[i].split(delimiter).map(s => s?.trim());
+                
                 const nome = cols[nomeIdx];
                 const email = cols[emailIdx];
                 const turmaStr = turmaIdx !== -1 ? cols[turmaIdx] : null;
+                
+                // Tratar a coluna do valor (substituir vírgula por ponto para parse correto)
+                const valorStr = valorIdx !== -1 && cols[valorIdx] ? cols[valorIdx].replace(',', '.') : '0';
+                const valor = parseFloat(valorStr) || 0;
 
-                if (nome && email && email.endsWith('@portalsesisp.org.br')) {
-                    newUsers.push({
-                        id: generateId(),
-                        role: 'student',
-                        nome: nome,
-                        email: email,
-                        password: '123',
-                        saldo: 0,
-                        turma: turmaStr
-                    });
+                // Verificação base: o e-mail tem de existir e ser do domínio do SESI
+                if (email && email.endsWith('@portalsesisp.org.br')) {
+                    const existingStudent = appState.users.find(u => u.email === email && u.role === 'student');
+
+                    if (existingStudent) {
+                        // 1. O Aluno já existe. Apenas atualizamos o saldo, se necessário.
+                        if (valor !== 0) {
+                            const novoSaldo = existingStudent.saldo + valor;
+                            updates.push({ id: existingStudent.id, saldo: novoSaldo });
+                            transactions.push({
+                                id: generateId(),
+                                aluno_id: existingStudent.id,
+                                tipo: valor > 0 ? 'credito' : 'debito',
+                                valor: Math.abs(valor),
+                                descricao: 'Atualização via CSV'
+                            });
+                        }
+                    } else {
+                        // 2. O Aluno NÃO existe. Precisamos criar.
+                        // Para criar, exigimos que haja um NOME preenchido na linha.
+                        if (nome) {
+                            const newId = generateId();
+                            newUsers.push({ 
+                                id: newId, 
+                                role: 'student', 
+                                nome: nome, 
+                                email: email, 
+                                password: '123', 
+                                saldo: valor > 0 ? valor : 0, // Ignoramos valores iniciais negativos em contas novas
+                                turma: turmaStr 
+                            });
+                            
+                            // Se já começou com saldo positivo, regista no log da conta dele
+                            if (valor > 0) {
+                                transactions.push({
+                                    id: generateId(),
+                                    aluno_id: newId,
+                                    tipo: 'credito',
+                                    valor: valor,
+                                    descricao: 'Depósito inicial via CSV'
+                                });
+                            }
+                        } else {
+                            // Encontrou e-mail que não existe no DB, mas não tem nome para poder criar.
+                            notFoundSemNome++;
+                        }
+                    }
                 }
             }
         }
 
-        if(newUsers.length > 0) {
-            // Como usamos "await" aqui, a função ali em cima tem de ser "async"
-            const { error } = await supabaseClient.from('users').insert(newUsers);
-            if(error) {
-                console.error('Erro no Supabase:', error);
-                toast('Erro ao inserir. Confirme se criou a coluna "turma".', 'error');
-            } else {
-                toast(`${newUsers.length} alunos importados com sucesso!`);
-            }
-        } else {
-            toast('Nenhum aluno válido com e-mail @portalsesisp foi encontrado.', 'error');
+        // Executar todas as operações necessárias no banco de dados (Supabase)
+        let promises = [];
+        
+        if (newUsers.length > 0) {
+            promises.push(supabaseClient.from('users').insert(newUsers));
         }
         
+        if (updates.length > 0) {
+            const updatePromises = updates.map(u => supabaseClient.from('users').update({ saldo: u.saldo }).eq('id', u.id));
+            promises.push(...updatePromises);
+        }
+        
+        if (transactions.length > 0) {
+            promises.push(supabaseClient.from('transacoes').insert(transactions));
+        }
+
+        if (promises.length > 0) {
+            await Promise.all(promises);
+            toast(`${newUsers.length} novos alunos e ${updates.length} atualizados!`);
+            if (notFoundSemNome > 0) toast(`${notFoundSemNome} ignorados (sem nome).`, 'warning');
+        } else {
+            toast('Nenhuma alteração válida encontrada.', 'warning');
+        }
+
         await refreshData();
         hideLoading();
         render();
-        
         event.target.value = '';
     };
     reader.readAsText(file);
 }
 
+async function excluirAluno(id) {
+    if (confirm('Tem certeza de que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
+        showLoading();
+        const { error } = await supabaseClient.from('users').delete().eq('id', id);
+        if (error) { console.error(error); toast('Erro ao excluir aluno do Supabase.', 'error'); } 
+        else toast('Aluno excluído com sucesso!');
+        await refreshData();
+        hideLoading();
+        render();
+    }
+}
+
 function renderTeacherStore() {
     return `
     <div class="fade-in space-y-6">
-        <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-black text-gray-800">${t('store_catalog')}</h1>
-            <button onclick="modalAddItem()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md btn-press flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i> ${t('add_item')}
-            </button>
-        </div>
-        
-        <div class="grid grid-cols-3 gap-6">
+        <div class="flex justify-between items-center"><h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('store_catalog')}</h1><button onclick="modalAddItem()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold btn-press flex items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> ${t('add_item')}</button></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             ${appState.loja.map(item => `
                 <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                    <div>
-                        <div class="w-12 h-12 bg-blue-50 text-ligra-main rounded-xl flex items-center justify-center mb-4">
-                            <i data-lucide="package" class="w-6 h-6"></i>
-                        </div>
-                        <h3 class="font-black text-lg text-gray-800">${item.nome}</h3>
-                        <p class="text-sm text-gray-500 mt-1">${item.descricao}</p>
-                    </div>
-                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span class="text-xs font-bold text-gray-400 uppercase">${t('base_price')}</span>
-                        <span class="font-black text-lg text-gray-800">${fmtCurrency(item.preco_base)}</span>
-                    </div>
+                    <div><div class="w-12 h-12 bg-blue-50 text-ligra-main rounded-xl flex items-center justify-center mb-4"><i data-lucide="package" class="w-6 h-6"></i></div><h3 class="font-black text-lg text-gray-800">${item.nome}</h3><p class="text-sm text-gray-500 mt-1">${item.descricao}</p></div>
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center"><span class="text-xs font-bold text-gray-400 uppercase">${t('base_price')}</span><span class="font-black text-lg text-gray-800">${fmtCurrency(item.preco_base)}</span></div>
                 </div>
             `).join('')}
         </div>
-    </div>
-    `;
+    </div>`;
 }
 
 function renderTeacherRequests() {
     const pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
-    
     return `
     <div class="fade-in space-y-4 md:space-y-6 w-full">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('pending_req')}</h1>
-        
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
             <div class="overflow-x-auto w-full rounded-2xl">
                 <table class="w-full text-left whitespace-nowrap min-w-[600px]">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th>
-                        </tr>
-                    </thead>
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th></tr></thead>
                     <tbody class="divide-y divide-gray-100">
-                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">No requests</td></tr>` : ''}
+                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">Sem solicitações</td></tr>` : ''}
                         ${pendentes.map(s => {
                             const aluno = appState.users.find(u => u.id === s.aluno_id);
                             const item = appState.loja.find(i => i.id === s.item_id);
                             return `
                             <tr class="hover:bg-gray-50">
-                                <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Unknown'}</td>
-                                <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Unknown'}</td>
-                                <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
-                                <td class="p-4">
-                                    <div class="flex justify-center gap-2">
-                                        <button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button>
-                                        <button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            `;
+                                <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Desconhecido'}</td><td class="p-4 font-bold text-ligra-main">${item?.nome || 'Desconhecido'}</td><td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
+                                <td class="p-4"><div class="flex justify-center gap-2"><button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button><button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button></div></td>
+                            </tr>`;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
         </div>
-    </div>
-    `;
+    </div>`;
+}
+
+function renderTeacherTransactions() {
+    const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    return `
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <div><h1 class="text-2xl md:text-3xl font-black text-gray-800">Log de Transações</h1><p class="text-gray-500 font-medium">Acompanhe todas as operações do sistema.</p></div>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[700px]">
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Data</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Aluno</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Operação</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Descrição</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Valor</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${history.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-gray-400">Nenhuma transação registrada.</td></tr>' : ''}
+                        ${history.map(tr => {
+                            const isCredito = tr.tipo === 'credito';
+                            const aluno = appState.users.find(u => u.id === tr.aluno_id);
+                            const dataStr = new Date(tr.created_at).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4 text-xs text-gray-400 font-bold">${dataStr}</td><td class="p-4 font-bold text-gray-800">${aluno ? aluno.nome : 'Desconhecido'}</td>
+                                <td class="p-4"><span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}"><i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>${isCredito ? 'CRÉDITO' : 'DÉBITO'}</span></td>
+                                <td class="p-4 font-bold text-gray-600 truncate max-w-[200px]">${tr.descricao}</td><td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
 }
 
 async function handleRequest(reqId, action) {
     showLoading();
     const req = appState.solicitacoes.find(s => s.id === reqId);
     if (!req) { hideLoading(); return; }
-    
-    // Update request status in DB
     await supabaseClient.from('solicitacoes_item').update({ status: action }).eq('id', reqId);
-    
-    // Se rejeitado, devolve o dinheiro ao aluno
     if (action === 'rejeitado') {
         const aluno = appState.users.find(u => u.id === req.aluno_id);
         if(aluno) {
             const newSaldo = aluno.saldo + parseFloat(req.preco_pago);
             await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', aluno.id);
-            await supabaseClient.from('transacoes').insert([{
-                id: generateId(),
-                aluno_id: aluno.id,
-                tipo: 'credito',
-                valor: req.preco_pago,
-                descricao: 'Refund for rejected request'
-            }]);
+            await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: aluno.id, tipo: 'credito', valor: req.preco_pago, descricao: 'Reembolso por pedido rejeitado' }]);
         }
     }
-    
-    toast(`Request ${action === 'aprovado' ? 'Approved' : 'Denied'}`);
+    toast(`Solicitação ${action === 'aprovado' ? 'Aprovada' : 'Rejeitada'}`);
     await refreshData();
     hideLoading();
     render();
 }
 
-
 // ============================================
-// 7. STUDENT VIEWS & ACTIONS
+// 5. STUDENT VIEWS & ACTIONS
 // ============================================
 function renderStudentDashboard() {
     const u = appState.currentUser;
     return `
     <div class="fade-in space-y-6">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
-        
         <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-6 md:p-8 rounded-3xl shadow-lg text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden gap-4">
-            <div class="z-10">
-                <p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p>
-                <h2 class="text-4xl md:text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2>
-            </div>
+            <div class="z-10"><p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p><h2 class="text-4xl md:text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2></div>
             <i data-lucide="wallet" class="w-16 h-16 opacity-20 absolute right-4 bottom-4 md:relative md:opacity-50"></i>
         </div>
 
+        <!-- NOVO: Container do gráfico para o aluno (Apenas visualização) -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
+            <div class="flex items-center gap-3 mb-4"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">Termómetro Económico</h2></div>
+            <p class="text-sm font-medium text-gray-500 mb-6">Acompanha se os preços da lojinha estão a subir ou a descer com base no comportamento da turma.</p>
+            <div class="h-64 w-full"><canvas id="inflationChart"></canvas></div>
+        </div>
+
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full">
-            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4"></i> ${t('change_pass')}</h3>
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-ligra-main"></i> ${t('change_pass')}</h3>
             <div class="flex flex-col sm:flex-row gap-2">
-                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none">
-                <button onclick="changeOwnPass()" class="bg-gray-800 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto">${t('save')}</button>
+                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-medium">
+                <button onclick="changeOwnPass()" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto btn-press">${t('save')}</button>
             </div>
         </div>
-    </div>
-    `;
+    </div>`;
 }
 
 async function changeOwnPass() {
     const np = $('#newPass').value;
-    if (np.length < 3) { toast('Password too short', 'error'); return; }
-    
+    if (np.length < 3) { toast('A senha é demasiado curta', 'warning'); return; }
     showLoading();
     const { error } = await supabaseClient.from('users').update({ password: np }).eq('id', appState.currentUser.id);
     hideLoading();
-    
-    if (error) { toast('Error updating password', 'error'); } 
-    else { 
-        appState.currentUser.password = np;
-        toast('Password updated!'); 
-        $('#newPass').value = '';
-    }
+    if (error) toast('Erro ao atualizar a senha', 'error'); 
+    else { appState.currentUser.password = np; toast('Senha atualizada!'); $('#newPass').value = ''; }
 }
 
 function renderStudentStore() {
     return `
     <div class="fade-in space-y-6">
-        <div class="flex justify-between items-end mb-6">
-            <div>
-                <h1 class="text-3xl font-black text-gray-800">${t('nav_mystore')} 🛒</h1>
-                <p class="text-gray-500 font-medium mt-1">Inflation Index: <span class="text-purple-500 font-bold">x${appState.inflationRate.toFixed(1)}</span></p>
-            </div>
-        </div>
-        
+        <div class="flex justify-between items-end mb-6"><div><h1 class="text-3xl font-black text-gray-800">${t('nav_mystore')} 🛒</h1><p class="text-gray-500 font-medium mt-1">Índice de Inflação: <span class="text-purple-500 font-bold">x${appState.inflationRate.toFixed(1)}</span></p></div></div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             ${appState.loja.map(item => {
                 const finalPrice = item.preco_base * appState.inflationRate;
                 const canAfford = appState.currentUser.saldo >= finalPrice;
                 return `
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
-                    <div>
-                        <div class="w-16 h-16 bg-blue-50 text-ligra-main rounded-2xl flex items-center justify-center mb-4">
-                            <i data-lucide="gift" class="w-8 h-8"></i>
-                        </div>
-                        <h3 class="font-black text-xl text-gray-800">${item.nome}</h3>
-                        <p class="text-sm text-gray-500 mt-2 font-medium">${item.descricao}</p>
-                    </div>
-                    <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center">
-                        <span class="font-black text-2xl text-gray-800">${fmtCurrency(finalPrice)}</span>
-                        <button onclick="buyItem('${item.id}', ${finalPrice})" 
-                                ${!canAfford ? 'disabled' : ''}
-                                class="${canAfford ? 'bg-ligra-main hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} px-6 py-3 rounded-xl font-bold transition-all shadow-md btn-press">
-                            ${t('buy')}
-                        </button>
-                    </div>
-                </div>
-                `;
+                    <div><div class="w-16 h-16 bg-blue-50 text-ligra-main rounded-2xl flex items-center justify-center mb-4"><i data-lucide="gift" class="w-8 h-8"></i></div><h3 class="font-black text-xl text-gray-800">${item.nome}</h3><p class="text-sm text-gray-500 mt-2 font-medium">${item.descricao}</p></div>
+                    <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center"><span class="font-black text-2xl text-gray-800">${fmtCurrency(finalPrice)}</span><button onclick="buyItem('${item.id}', ${finalPrice})" ${!canAfford ? 'disabled' : ''} class="${canAfford ? 'bg-ligra-main hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} px-6 py-3 rounded-xl font-bold transition-all shadow-md btn-press">${t('buy')}</button></div>
+                </div>`;
             }).join('')}
         </div>
-    </div>
-    `;
+    </div>`;
 }
 
 async function buyItem(itemId, price) {
     const user = appState.currentUser;
-    if (user.saldo < price) {
-        toast(t('no_funds'), 'error');
-        return;
-    }
-    
+    if (user.saldo < price) { toast(t('no_funds'), 'error'); return; }
     showLoading();
     const newSaldo = user.saldo - price;
-    
-    // DB Transactions
     await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', user.id);
-    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: user.id, tipo: 'debito', valor: price, descricao: 'Store purchase request' }]);
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: user.id, tipo: 'debito', valor: price, descricao: 'Pedido de compra na loja' }]);
     await supabaseClient.from('solicitacoes_item').insert([{ id: generateId(), aluno_id: user.id, item_id: itemId, preco_pago: price, status: 'pendente' }]);
-
     toast(t('success_buy'));
     await refreshData();
     hideLoading();
@@ -951,129 +811,56 @@ async function buyItem(itemId, price) {
 function renderStudentItems() {
     const uId = appState.currentUser.id;
     const myReqs = appState.solicitacoes;
-    
     const pendentes = myReqs.filter(s => s.status === 'pendente');
     const aprovados = myReqs.filter(s => s.status === 'aprovado');
-
     const renderCard = (s, statusTag) => {
         const item = appState.loja.find(i => i.id === s.item_id);
         return `
             <div class="bg-white p-4 rounded-xl border border-gray-100 flex justify-between items-center">
-                <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center"><i data-lucide="package" class="w-5 h-5 text-gray-400"></i></div>
-                    <div>
-                        <p class="font-bold text-gray-800">${item?.nome || 'Item removed'}</p>
-                        <p class="text-xs text-gray-400">${fmtCurrency(s.preco_pago)}</p>
-                    </div>
-                </div>
+                <div class="flex items-center gap-4"><div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center"><i data-lucide="package" class="w-5 h-5 text-gray-400"></i></div><div><p class="font-bold text-gray-800">${item?.nome || 'Item removido'}</p><p class="text-xs text-gray-400">${fmtCurrency(s.preco_pago)}</p></div></div>
                 ${statusTag}
-            </div>
-        `;
+            </div>`;
     };
-
     return `
     <div class="fade-in space-y-8">
-        <div>
-            <h2 class="text-2xl font-black text-gray-800 mb-4">${t('pending_items')}</h2>
-            <div class="space-y-3">
-                ${pendentes.length === 0 ? '<p class="text-gray-400 italic">No pending items.</p>' : ''}
-                ${pendentes.map(s => renderCard(s, `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold uppercase">Pending</span>`)).join('')}
-            </div>
-        </div>
-
-        <div>
-            <h2 class="text-2xl font-black text-gray-800 mb-4">${t('acquired_items')}</h2>
-            <div class="space-y-3">
-                ${aprovados.length === 0 ? '<p class="text-gray-400 italic">No items acquired yet.</p>' : ''}
-                ${aprovados.map(s => renderCard(s, `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold uppercase"><i data-lucide="check" class="w-3 h-3 inline"></i> Acquired</span>`)).join('')}
-            </div>
-        </div>
-    </div>
-    `;
+        <div><h2 class="text-2xl font-black text-gray-800 mb-4">${t('pending_items')}</h2><div class="space-y-3">${pendentes.length === 0 ? '<p class="text-gray-400 italic">Sem itens pendentes.</p>' : ''}${pendentes.map(s => renderCard(s, `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold uppercase">Pendente</span>`)).join('')}</div></div>
+        <div><h2 class="text-2xl font-black text-gray-800 mb-4">${t('acquired_items')}</h2><div class="space-y-3">${aprovados.length === 0 ? '<p class="text-gray-400 italic">Nenhum item adquirido ainda.</p>' : ''}${aprovados.map(s => renderCard(s, `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold uppercase"><i data-lucide="check" class="w-3 h-3 inline"></i> Adquirido</span>`)).join('')}</div></div>
+    </div>`;
 }
 
 function renderStudentHistory() {
     const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-
     return `
     <div class="fade-in space-y-4 md:space-y-6 w-full">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_history')}</h1>
-        
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
             <div class="overflow-x-auto w-full rounded-2xl">
                 <table class="w-full text-left whitespace-nowrap min-w-[500px]">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Type</th>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Description</th>
-                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Value</th>
-                        </tr>
-                    </thead>
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Tipo</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Descrição</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Valor</th></tr></thead>
                     <tbody class="divide-y divide-gray-100">
-                        ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">No transactions</td></tr>' : ''}
+                        ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">Nenhuma transação</td></tr>' : ''}
                         ${history.map(tr => {
                             const isCredito = tr.tipo === 'credito';
                             return `
                             <tr class="hover:bg-gray-50">
-                                <td class="p-4">
-                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                                        <i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
-                                        ${isCredito ? 'EARN' : 'SPEND'}
-                                    </span>
-                                </td>
-                                <td class="p-4 font-bold text-gray-600 truncate max-w-[150px]">${tr.descricao}</td>
-                                <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">
-                                    ${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}
-                                </td>
-                            </tr>
-                            `;
+                                <td class="p-4"><span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}"><i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>${isCredito ? 'GANHO' : 'GASTO'}</span></td>
+                                <td class="p-4 font-bold text-gray-600 truncate max-w-[150px]">${tr.descricao}</td><td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}</td>
+                            </tr>`;
                         }).join('')}
                     </tbody>
                 </table>
             </div>
         </div>
-    </div>
-    `;
+    </div>`;
 }
 
 // ============================================
-// 8. MODALS (TEACHER DB ACTIONS)
+// 6. MODALS
 // ============================================
-function modalAddStudent() {
-    showModal(`
-        <h3 class="text-xl font-black text-gray-800 mb-4">${t('add_student')}</h3>
-        <div class="space-y-4">
-            <input type="text" id="nAlunoNome" placeholder="Name" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
-            <input type="email" id="nAlunoEmail" placeholder="email@portalsesisp.org.br" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
-        </div>
-        <div class="flex gap-3 mt-6">
-            <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button>
-            <button onclick="execAddStudent()" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl">${t('confirm')}</button>
-        </div>
-    `);
-}
-
-async function execAddStudent() {
-    const nome = $('#nAlunoNome').value.trim();
-    const email = $('#nAlunoEmail').value.trim();
-    if(!email.endsWith('@portalsesisp.org.br')) { toast(t('invalid_email'), 'error'); return; }
-    
-    showLoading();
-    const { error } = await supabaseClient.from('users').insert([{ id: generateId(), role: 'student', nome, email, password: '123', saldo: 0 }]);
-    
-    if (error) { toast('Email already exists or error', 'error'); }
-    else { toast('Student added!'); }
-    
-    closeModal();
-    await refreshData();
-    hideLoading();
-    render();
-}
-
 async function modalResetPass(id) {
     showLoading();
     await supabaseClient.from('users').update({ password: '123' }).eq('id', id);
-    toast('Password reset to: 123');
+    toast('Senha reposta para: 123');
     hideLoading();
 }
 
@@ -1081,8 +868,8 @@ function modalFundos(id, tipo) {
     showModal(`
         <h3 class="text-xl font-black text-gray-800 mb-4">${tipo === 'credito' ? t('add_funds') : t('sub_funds')}</h3>
         <div class="space-y-4">
-            <input type="number" id="fValor" placeholder="${t('amount')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold text-lg">
-            <input type="text" id="fDesc" placeholder="${t('reason')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+            <input type="number" id="fValor" placeholder="${t('amount')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold text-lg">
+            <input type="text" id="fDesc" placeholder="${t('reason')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
         </div>
         <div class="flex gap-3 mt-6">
             <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button>
@@ -1093,35 +880,25 @@ function modalFundos(id, tipo) {
 
 async function execFundos(id, tipo) {
     const v = parseFloat($('#fValor').value);
-    const d = $('#fDesc').value || 'Manual trans.';
+    const d = $('#fDesc').value || 'Trans. manual';
     if(!v || v <= 0) return;
-    
     showLoading();
     const u = appState.users.find(x => x.id === id);
     let newSaldo = u.saldo;
-
     if(tipo === 'credito') newSaldo += v;
-    else {
-        if (u.saldo < v) { hideLoading(); toast(t('no_funds'), 'error'); return; }
-        newSaldo -= v;
-    }
+    else { if (u.saldo < v) { hideLoading(); toast(t('no_funds'), 'error'); return; } newSaldo -= v; }
     
     await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', id);
     await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: id, tipo, valor: v, descricao: d }]);
-    
-    toast('Success!'); 
-    closeModal();
-    await refreshData();
-    hideLoading();
-    render();
+    toast('Sucesso!'); closeModal(); await refreshData(); hideLoading(); render();
 }
 
 function modalAddItem() {
     showModal(`
         <h3 class="text-xl font-black text-gray-800 mb-4">${t('add_item')}</h3>
         <div class="space-y-4">
-            <input type="text" id="iNome" placeholder="Item Name" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
-            <input type="text" id="iDesc" placeholder="Description" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="iNome" placeholder="Nome do Item" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="iDesc" placeholder="Descrição" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
             <input type="number" id="iPreco" placeholder="${t('base_price')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
         </div>
         <div class="flex gap-3 mt-6">
@@ -1138,12 +915,7 @@ async function execAddItem() {
     if(!nome || !preco) return;
     showLoading();
     await supabaseClient.from('loja').insert([{ id: generateId(), nome, descricao: desc, preco_base: preco }]);
-    
-    toast('Item added!'); 
-    closeModal();
-    await refreshData();
-    hideLoading();
-    render();
+    toast('Item adicionado!'); closeModal(); await refreshData(); hideLoading(); render();
 }
 
 render();
