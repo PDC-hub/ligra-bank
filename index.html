@@ -555,7 +555,8 @@ function updateInflation() {
 
 // Substitui a tua função renderTeacherStudents (ou renderAlunos) atual por esta ideia:
 function renderTeacherStudents() {
-    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];    
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    
     let filtrados = appState.users;
     if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
         filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
@@ -592,6 +593,7 @@ function renderTeacherStudents() {
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
+                        ${filtrados.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-gray-400">Nenhum aluno encontrado</td></tr>` : ''}
                         ${filtrados.map(s => `
                             <tr class="hover:bg-gray-50">
                                 <td class="p-4">
@@ -605,9 +607,15 @@ function renderTeacherStudents() {
                                 <td class="p-4">
                                     <div class="flex justify-center gap-2">
                                         <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-2 md:py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
+                                        
                                         <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-2 md:py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">- ${t('sub_funds')}</button>
-                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300">
+                                        
+                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300" title="${t('reset_pass')}">
                                             <i data-lucide="key" class="w-4 h-4 md:w-3 md:h-3"></i>
+                                        </button>
+
+                                        <button onclick="excluirAluno('${s.id}')" class="px-3 py-2 md:py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors" title="Excluir Aluno">
+                                            <i data-lucide="trash-2" class="w-4 h-4 md:w-3 md:h-3"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -620,7 +628,6 @@ function renderTeacherStudents() {
     </div>
     `;
 }
-
 // ============================================
 // FUNÇÃO PARA EXCLUIR ALUNO DO SUPABASE
 // ============================================
