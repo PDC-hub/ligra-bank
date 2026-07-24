@@ -537,9 +537,15 @@ async function handleCSVUpload(event) {
             const headers = lines[0].toLowerCase().split(delimiter).map(h => h?.trim());
             
             let nomeIdx = headers.indexOf('nome');
+            
+            // Passo educativo: Aqui procuramos por 'email'. 
+            // Se não encontrarmos (-1), tentamos procurar por 'e-mail' com hífen.
             let emailIdx = headers.indexOf('email');
+            if (emailIdx === -1) emailIdx = headers.indexOf('e-mail'); 
+
             let turmaIdx = headers.indexOf('turma');
             if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo');
+            
             let valorIdx = headers.indexOf('valor');
             if (valorIdx === -1) valorIdx = headers.indexOf('saldo');
 
@@ -626,11 +632,10 @@ async function handleCSVUpload(event) {
         await refreshData();
         hideLoading();
         render();
-        event.target.value = '';
+        event.target.value = ''; // Limpa o input para permitir importar o mesmo ficheiro novamente se necessário
     };
     reader.readAsText(file);
 }
-
 async function excluirAluno(id) {
     if (confirm('Tem certeza de que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
         showLoading();
