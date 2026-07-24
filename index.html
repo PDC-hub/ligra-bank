@@ -583,29 +583,30 @@ async function handleCSVUpload(event) {
         let newUsers = [];
 
         if (lines.length > 0) {
-            // Descobre automaticamente se o CSV usa vírgula (,) ou ponto e vírgula (;)
             const delimiter = lines[0].includes(';') ? ';' : ',';
-            
-            // Lê a primeira linha (cabeçalhos)
             const headers = lines[0].toLowerCase().split(delimiter).map(h => h?.trim());
             
-            // Encontra a posição das colunas "nome" e "email"
+            // Encontra a posição das colunas "nome", "email" e "turma"/"grupo"
             let nomeIdx = headers.indexOf('nome');
             let emailIdx = headers.indexOf('email');
             
-            // Se não encontrar pelo nome do cabeçalho, assume colunas 1 e 2
+            // Procura por 'turma'. Se não achar, procura por 'grupo' (que é o nome na tua planilha)
+            let turmaIdx = headers.indexOf('turma');
+            if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo'); 
+            
             if (nomeIdx === -1) nomeIdx = 0;
             if (emailIdx === -1) emailIdx = 1;
 
-            // Começa no i = 1 para saltar o cabeçalho
             for (let i = 1; i < lines.length; i++) {
                 if (!lines[i].trim()) continue; // Ignora linhas vazias
                 
                 const cols = lines[i].split(delimiter).map(s => s?.trim());
                 const nome = cols[nomeIdx];
                 const email = cols[emailIdx];
+                
+                // Se encontrou a coluna da turma, pega o valor (ex: "9A")
+                const turmaStr = turmaIdx !== -1 ? cols[turmaIdx] : null;
 
-                // Valida se tem nome, email e se termina com o domínio correto
                 if (nome && email && email.endsWith('@portalsesisp.org.br')) {
                     newUsers.push({
                         id: generateId(),
@@ -613,11 +614,33 @@ async function handleCSVUpload(event) {
                         nome: nome,
                         email: email,
                         password: '123',
-                        saldo: 0
+                        saldo: 0,
+                        turma: turmaStr // <-- AQUI: Enviamos a turma para o Supabase
                     });
                 }
             }
         }
+
+        if(newUsers.length > 0) {
+            const { error } = await supabaseClient.from('users').insert(newUsers);
+            if(error) {
+                console.error('Erro no Supabase:', error);
+                toast('Erro ao inserir. Confirme se criou a coluna "turma" no Supabase.', 'error');
+            } else {
+                toast(`${newUsers.length} alunos importados com sucesso!`);
+            }
+        } else {
+            toast('Nenhum aluno válido com e-mail @portalsesisp foi encontrado.', 'error');
+        }
+        
+        await refreshData();
+        hideLoading();
+        render();
+        
+        event.target.value = ''; // Reseta o input
+    };
+    reader.readAsText(file);
+}
 
         if(newUsers.length > 0) {
             const { error } = await supabaseClient.from('users').insert(newUsers);
