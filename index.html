@@ -334,21 +334,57 @@ async function refreshData() {
 // ============================================
 // 5. RENDER FUNCTIONS
 // ============================================
+// ============================================
+// 5.1. AJUSTE DO LAYOUT GERAL E MENU MOBILE
+// ============================================
 function render() {
     const root = $('#root');
     if (!appState.currentUser) {
         root.innerHTML = renderLoginScreen();
     } else {
+        const role = appState.currentUser.role;
+        const view = appState.currentView;
+        
+        // Opções do menu para o telemóvel (Dropdown)
+        const mobileOptions = role === 'teacher' ? `
+            <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
+            <option value="students" ${view === 'students' ? 'selected' : ''}>${t('nav_students')}</option>
+            <option value="store" ${view === 'store' ? 'selected' : ''}>${t('nav_store')}</option>
+            <option value="requests" ${view === 'requests' ? 'selected' : ''}>${t('nav_requests')}</option>
+        ` : `
+            <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
+            <option value="mystore" ${view === 'mystore' ? 'selected' : ''}>${t('nav_mystore')}</option>
+            <option value="myitems" ${view === 'myitems' ? 'selected' : ''}>${t('nav_myitems')}</option>
+            <option value="history" ${view === 'history' ? 'selected' : ''}>${t('nav_history')}</option>
+        `;
+
         root.innerHTML = `
             ${renderSidebar()}
-            <main class="flex-1 flex flex-col h-full bg-gray-50 overflow-y-auto">
-                <header class="bg-white p-4 border-b border-gray-200 flex justify-end items-center shadow-sm gap-4">
+            <main class="flex-1 flex flex-col h-full bg-gray-50 overflow-y-auto w-full overflow-x-hidden">
+                
+                <header class="md:hidden bg-white p-4 border-b border-gray-200 flex justify-between items-center shadow-sm sticky top-0 z-20">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-ligra-main rounded-lg flex items-center justify-center text-white">
+                            <i data-lucide="piggy-bank" class="w-5 h-5"></i>
+                        </div>
+                        <span class="font-black text-lg text-ligra-dark">LigraBank</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleLang()" class="p-2 text-gray-500 hover:text-ligra-main"><i data-lucide="globe" class="w-5 h-5"></i></button>
+                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark">
+                            ${mobileOptions}
+                        </select>
+                    </div>
+                </header>
+
+                <header class="hidden md:flex bg-white p-4 border-b border-gray-200 justify-end items-center shadow-sm gap-4">
                     <button onclick="toggleLang()" class="text-sm font-bold text-gray-500 hover:text-ligra-main flex items-center gap-2">
                         <i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}
                     </button>
                     <div class="font-black text-ligra-dark">${appState.currentUser.nome}</div>
                 </header>
-                <div class="p-6 max-w-5xl mx-auto w-full">
+                
+                <div class="p-4 md:p-6 max-w-5xl mx-auto w-full">
                     ${renderMainContent()}
                 </div>
             </main>
@@ -411,8 +447,9 @@ function renderSidebar() {
         `;
     }
 
+    // Adicionado 'hidden md:flex' para esconder o menu lateral no telemóvel
     return `
-    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col shadow-sm">
+    <aside class="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shadow-sm">
         <div class="p-6 border-b border-gray-100 flex items-center gap-3">
             <div class="w-10 h-10 bg-ligra-main rounded-xl flex items-center justify-center text-white">
                 <i data-lucide="piggy-bank" class="w-6 h-6"></i>
@@ -518,51 +555,67 @@ function updateInflation() {
 
 // Substitui a tua função renderTeacherStudents (ou renderAlunos) atual por esta ideia:
 function renderTeacherStudents() {
-    // 1. Descobrir quais são as turmas únicas (ex: 9A, 9B) lendo a lista de alunos
-    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
-    
-    // 2. Filtrar os alunos se uma turma estiver selecionada (usamos appState.filtroTurma para guardar a escolha)
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];    
     let filtrados = appState.users;
     if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
         filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
     }
 
     return `
-    <div class="fade-in space-y-6">
-        <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-black text-gray-800">Alunos</h1>
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_students')}</h1>
             <div class="flex gap-2">
-                <label class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2">
-                    <i data-lucide="upload" class="w-4 h-4"></i> Importar CSV
+                <label class="flex-1 text-center justify-center bg-gray-800 hover:bg-gray-900 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i> ${t('import_csv')}
                     <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
                 </label>
             </div>
         </div>
         
-        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
-            <span class="font-bold text-gray-600">Filtrar por Turma:</span>
-            <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500">
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-start md:items-center">
+            <span class="font-bold text-gray-600 text-sm">Filtro de Turma:</span>
+            <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full md:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm">
                 <option value="todas">Todas as Turmas</option>
                 ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
-            <span class="text-sm text-gray-400 ml-auto">${filtrados.length} aluno(s) listado(s)</span>
         </div>
 
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table class="w-full text-left">
-                <tbody class="divide-y divide-gray-100">
-                    ${filtrados.map(s => `
-                        <tr class="hover:bg-gray-50">
-                            <td class="p-4">
-                                <p class="font-bold text-gray-800">${s.nome}</p>
-                                <p class="text-xs text-gray-400">${s.email}</p>
-                                ${s.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md">${s.turma}</span>` : ''}
-                            </td>
-                            <td class="p-4 text-right font-black text-blue-600">${fmtCurrency(s.saldo)}</td>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[600px]">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">${t('balance')}</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${filtrados.map(s => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4">
+                                    <div class="flex items-center gap-2">
+                                        <p class="font-bold text-gray-800">${s.nome}</p>
+                                        ${s.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md">${s.turma}</span>` : ''}
+                                    </div>
+                                    <p class="text-xs text-gray-400 mt-0.5">${s.email}</p>
+                                </td>
+                                <td class="p-4 text-right font-black text-ligra-main">${fmtCurrency(s.saldo)}</td>
+                                <td class="p-4">
+                                    <div class="flex justify-center gap-2">
+                                        <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-2 md:py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
+                                        <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-2 md:py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">- ${t('sub_funds')}</button>
+                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300">
+                                            <i data-lucide="key" class="w-4 h-4 md:w-3 md:h-3"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     `;
@@ -576,7 +629,6 @@ async function handleCSVUpload(event) {
     const reader = new FileReader();
     reader.onload = async function(e) {
         const text = e.target.result;
-        // Quebra as linhas corretamente (suporta Windows e Mac)
         const lines = text.split(/\r?\n/);
         let newUsers = [];
 
@@ -584,25 +636,22 @@ async function handleCSVUpload(event) {
             const delimiter = lines[0].includes(';') ? ';' : ',';
             const headers = lines[0].toLowerCase().split(delimiter).map(h => h?.trim());
             
-            // Encontra a posição das colunas "nome", "email" e "turma"/"grupo"
             let nomeIdx = headers.indexOf('nome');
             let emailIdx = headers.indexOf('email');
             
-            // Procura por 'turma'. Se não achar, procura por 'grupo' (que é o nome na tua planilha)
+            // Procura a coluna turma ou grupo
             let turmaIdx = headers.indexOf('turma');
-            if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo'); 
+            if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo');
             
             if (nomeIdx === -1) nomeIdx = 0;
             if (emailIdx === -1) emailIdx = 1;
 
             for (let i = 1; i < lines.length; i++) {
-                if (!lines[i].trim()) continue; // Ignora linhas vazias
+                if (!lines[i].trim()) continue;
                 
                 const cols = lines[i].split(delimiter).map(s => s?.trim());
                 const nome = cols[nomeIdx];
                 const email = cols[emailIdx];
-                
-                // Se encontrou a coluna da turma, pega o valor (ex: "9A")
                 const turmaStr = turmaIdx !== -1 ? cols[turmaIdx] : null;
 
                 if (nome && email && email.endsWith('@portalsesisp.org.br')) {
@@ -613,17 +662,18 @@ async function handleCSVUpload(event) {
                         email: email,
                         password: '123',
                         saldo: 0,
-                        turma: turmaStr // <-- AQUI: Enviamos a turma para o Supabase
+                        turma: turmaStr
                     });
                 }
             }
         }
 
         if(newUsers.length > 0) {
+            // Como usamos "await" aqui, a função ali em cima tem de ser "async"
             const { error } = await supabaseClient.from('users').insert(newUsers);
             if(error) {
                 console.error('Erro no Supabase:', error);
-                toast('Erro ao inserir. Confirme se criou a coluna "turma" no Supabase.', 'error');
+                toast('Erro ao inserir. Confirme se criou a coluna "turma".', 'error');
             } else {
                 toast(`${newUsers.length} alunos importados com sucesso!`);
             }
@@ -635,28 +685,6 @@ async function handleCSVUpload(event) {
         hideLoading();
         render();
         
-        event.target.value = ''; // Reseta o input
-    };
-    reader.readAsText(file);
-}
-
-        if(newUsers.length > 0) {
-            const { error } = await supabaseClient.from('users').insert(newUsers);
-            if(error) {
-                console.error('Erro no Supabase:', error);
-                toast('Erro ao inserir alunos no Supabase. Verifique o RLS.', 'error');
-            } else {
-                toast(`${newUsers.length} alunos importados com sucesso!`);
-            }
-        } else {
-            toast('Nenhum aluno válido com e-mail @portalsesisp foi encontrado.', 'error');
-        }
-        
-        await refreshData();
-        hideLoading();
-        render();
-        
-        // Reseta o input para poder importar novamente se necessário
         event.target.value = '';
     };
     reader.readAsText(file);
@@ -697,40 +725,42 @@ function renderTeacherRequests() {
     const pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
     
     return `
-    <div class="fade-in space-y-6">
-        <h1 class="text-3xl font-black text-gray-800">${t('pending_req')}</h1>
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('pending_req')}</h1>
         
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table class="w-full text-left">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">No requests</td></tr>` : ''}
-                    ${pendentes.map(s => {
-                        const aluno = appState.users.find(u => u.id === s.aluno_id);
-                        const item = appState.loja.find(i => i.id === s.item_id);
-                        return `
-                        <tr class="hover:bg-gray-50">
-                            <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Unknown'}</td>
-                            <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Unknown'}</td>
-                            <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
-                            <td class="p-4">
-                                <div class="flex justify-center gap-2">
-                                    <button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button>
-                                    <button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button>
-                                </div>
-                            </td>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[600px]">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th>
                         </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">No requests</td></tr>` : ''}
+                        ${pendentes.map(s => {
+                            const aluno = appState.users.find(u => u.id === s.aluno_id);
+                            const item = appState.loja.find(i => i.id === s.item_id);
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Unknown'}</td>
+                                <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Unknown'}</td>
+                                <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
+                                <td class="p-4">
+                                    <div class="flex justify-center gap-2">
+                                        <button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button>
+                                        <button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     `;
@@ -774,21 +804,21 @@ function renderStudentDashboard() {
     const u = appState.currentUser;
     return `
     <div class="fade-in space-y-6">
-        <h1 class="text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
+        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
         
-        <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-8 rounded-3xl shadow-lg text-white flex justify-between items-center">
-            <div>
-                <p class="text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p>
-                <h2 class="text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2>
+        <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-6 md:p-8 rounded-3xl shadow-lg text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden gap-4">
+            <div class="z-10">
+                <p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p>
+                <h2 class="text-4xl md:text-5xl font-black mt-2 text-ligra-accent">${fmtCurrency(u.saldo)}</h2>
             </div>
-            <i data-lucide="wallet" class="w-16 h-16 opacity-50"></i>
+            <i data-lucide="wallet" class="w-16 h-16 opacity-20 absolute right-4 bottom-4 md:relative md:opacity-50"></i>
         </div>
 
-        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full">
             <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4"></i> ${t('change_pass')}</h3>
-            <div class="flex gap-2">
-                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-2 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none">
-                <button onclick="changeOwnPass()" class="bg-gray-800 text-white px-4 py-2 rounded-xl font-bold">${t('save')}</button>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none">
+                <button onclick="changeOwnPass()" class="bg-gray-800 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto">${t('save')}</button>
             </div>
         </div>
     </div>
@@ -919,39 +949,41 @@ function renderStudentHistory() {
     const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
 
     return `
-    <div class="fade-in space-y-6">
-        <h1 class="text-3xl font-black text-gray-800">${t('nav_history')}</h1>
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_history')}</h1>
         
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <table class="w-full text-left">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Type</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Description</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Value</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100">
-                    ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">No transactions</td></tr>' : ''}
-                    ${history.map(tr => {
-                        const isCredito = tr.tipo === 'credito';
-                        return `
-                        <tr class="hover:bg-gray-50">
-                            <td class="p-4">
-                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                                    <i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
-                                    ${isCredito ? 'EARN' : 'SPEND'}
-                                </span>
-                            </td>
-                            <td class="p-4 font-bold text-gray-600">${tr.descricao}</td>
-                            <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">
-                                ${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}
-                            </td>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[500px]">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Type</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase">Description</th>
+                            <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Value</th>
                         </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">No transactions</td></tr>' : ''}
+                        ${history.map(tr => {
+                            const isCredito = tr.tipo === 'credito';
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                        <i data-lucide="${isCredito ? 'trending-up' : 'trending-down'}" class="w-3 h-3"></i>
+                                        ${isCredito ? 'EARN' : 'SPEND'}
+                                    </span>
+                                </td>
+                                <td class="p-4 font-bold text-gray-600 truncate max-w-[150px]">${tr.descricao}</td>
+                                <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : 'text-red-600'}">
+                                    ${isCredito ? '+' : '-'} ${fmtCurrency(tr.valor)}
+                                </td>
+                            </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
     `;
