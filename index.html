@@ -516,52 +516,50 @@ function updateInflation() {
     render();
 }
 
+// Substitui a tua função renderTeacherStudents (ou renderAlunos) atual por esta ideia:
 function renderTeacherStudents() {
-    const students = appState.users;
+    // 1. Descobrir quais são as turmas únicas (ex: 9A, 9B) lendo a lista de alunos
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    
+    // 2. Filtrar os alunos se uma turma estiver selecionada (usamos appState.filtroTurma para guardar a escolha)
+    let filtrados = appState.users;
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
+    }
+
     return `
     <div class="fade-in space-y-6">
         <div class="flex justify-between items-center">
-            <h1 class="text-3xl font-black text-gray-800">${t('nav_students')}</h1>
+            <h1 class="text-3xl font-black text-gray-800">Alunos</h1>
             <div class="flex gap-2">
                 <label class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2">
-                    <i data-lucide="upload" class="w-4 h-4"></i> ${t('import_csv')}
+                    <i data-lucide="upload" class="w-4 h-4"></i> Importar CSV
                     <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
                 </label>
-                <button onclick="modalAddStudent()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold shadow-md btn-press flex items-center gap-2">
-                    <i data-lucide="plus" class="w-4 h-4"></i> ${t('add_student')}
-                </button>
             </div>
         </div>
         
-        <p class="text-xs text-gray-400">CSV Format: Name, Email (must be @portalsesisp.org.br)</p>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex gap-4 items-center">
+            <span class="font-bold text-gray-600">Filtrar por Turma:</span>
+            <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500">
+                <option value="todas">Todas as Turmas</option>
+                ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
+            <span class="text-sm text-gray-400 ml-auto">${filtrados.length} aluno(s) listado(s)</span>
+        </div>
 
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <table class="w-full text-left">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">${t('balance')}</th>
-                        <th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Actions</th>
-                    </tr>
-                </thead>
                 <tbody class="divide-y divide-gray-100">
-                    ${students.map(s => `
+                    ${filtrados.map(s => `
                         <tr class="hover:bg-gray-50">
                             <td class="p-4">
                                 <p class="font-bold text-gray-800">${s.nome}</p>
                                 <p class="text-xs text-gray-400">${s.email}</p>
+                                ${s.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md">${s.turma}</span>` : ''}
                             </td>
-                            <td class="p-4 text-right font-black text-ligra-main">${fmtCurrency(s.saldo)}</td>
-                            <td class="p-4">
-                                <div class="flex justify-center gap-2">
-                                    <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200">+ ${t('add_funds')}</button>
-                                    <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200">- ${t('sub_funds')}</button>
-                                    <button onclick="modalResetPass('${s.id}')" class="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300">
-                                        <i data-lucide="key" class="w-3 h-3"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
+                            <td class="p-4 text-right font-black text-blue-600">${fmtCurrency(s.saldo)}</td>
+                            </tr>
                     `).join('')}
                 </tbody>
             </table>
