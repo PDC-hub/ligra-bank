@@ -9,7 +9,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Adicionamos a biblioteca Chart.js para os gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
@@ -58,7 +57,7 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const generateId = () => Math.random().toString(36).substr(2, 12);
 
 let appState = {
-    lang: 'pt', // Mudei o default para português conforme o público
+    lang: 'pt',
     currentUser: null,
     currentView: 'dashboard',
     inflationRate: 1.0, 
@@ -67,7 +66,7 @@ let appState = {
     transacoes: [],
     loja: [],
     solicitacoes: [],
-    inflacaoHistorico: [] // Novo: Espaço para guardar o histórico do gráfico
+    inflacaoHistorico: []
 };
 
 const translations = {
@@ -167,13 +166,11 @@ async function refreshData() {
         const { data: loja } = await supabaseClient.from('loja').select('*');
         appState.loja = loja || [];
 
-        // NOVO: Tentar buscar histórico de inflação do banco
         const { data: hist, error: histErr } = await supabaseClient.from('inflacao_historico').select('*').order('created_at', { ascending: true });
         if (!histErr && hist && hist.length > 0) {
             appState.inflacaoHistorico = hist;
             appState.inflationRate = hist[hist.length - 1].taxa;
         } else if (appState.inflacaoHistorico.length === 0) {
-            // Rede de segurança: Se a tabela não existir, usa um valor padrão inicial na memória
             appState.inflacaoHistorico = [{ taxa: 1.0, created_at: new Date().toISOString() }];
             appState.inflationRate = 1.0;
         }
@@ -252,16 +249,13 @@ function render() {
         `;
     }
     lucide.createIcons();
-    // NOVO: Renderizar o gráfico logo após atualizar o HTML
     renderCharts();
 }
 
-// NOVO: Função responsável por desenhar o gráfico
 function renderCharts() {
     const ctx = document.getElementById('inflationChart');
-    if (!ctx) return; // Se não houver canvas (ex: noutra página), não faz nada
+    if (!ctx) return;
     
-    // Limpar gráfico anterior se existir (previne sobreposições visuais)
     if (window.inflationChartInstance) {
         window.inflationChartInstance.destroy();
     }
@@ -279,10 +273,10 @@ function renderCharts() {
             datasets: [{
                 label: 'Taxa de Inflação',
                 data: data,
-                borderColor: '#8B5CF6', // Roxo (Tailwind purple-500)
+                borderColor: '#8B5CF6',
                 backgroundColor: 'rgba(139, 92, 246, 0.2)',
                 borderWidth: 3,
-                tension: 0.3, // Suaviza a linha (curva)
+                tension: 0.3,
                 fill: true,
                 pointBackgroundColor: '#8B5CF6',
                 pointRadius: 4
@@ -377,7 +371,6 @@ function renderMainContent() {
 // 4. TEACHER VIEWS & ACTIONS
 // ============================================
 function renderTeacherDashboard() {
-    // 1. Filtragem Centralizada de Alunos para o Dashboard
     const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
     let filtrados = appState.users;
     if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
@@ -389,8 +382,6 @@ function renderTeacherDashboard() {
     <div class="fade-in space-y-6">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
-            
-            <!-- NOVO: Dropdown de Turmas movido para o Dashboard para filtro ao vivo da Economia -->
             <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm bg-white shadow-sm">
                 <option value="todas">Todas as Turmas</option>
                 ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
@@ -400,7 +391,6 @@ function renderTeacherDashboard() {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-ligra-main">
                 <p class="text-sm font-bold text-gray-400 uppercase">${appState.filtroTurma === 'todas' ? t('total_economy') : 'Economia da Turma'}</p>
-                <!-- Saldo em vermelho se for menor que 0 -->
                 <h2 class="text-3xl md:text-4xl font-black mt-2 ${totalEco < 0 ? 'text-red-500' : 'text-ligra-dark'}">${fmtCurrency(totalEco)}</h2>
             </div>
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
@@ -441,7 +431,6 @@ async function updateInflation() {
     
     showLoading();
     
-    // Tenta salvar o novo valor no Supabase
     const { error } = await supabaseClient.from('inflacao_historico').insert([{
         id: generateId(),
         taxa: novaTaxa
@@ -507,7 +496,6 @@ function renderTeacherStudents() {
                                     </div>
                                     <p class="text-xs text-gray-400 mt-0.5">${s.email}</p>
                                 </td>
-                                <!-- Saldo em vermelho se for menor que 0 -->
                                 <td class="p-4 text-right font-black ${s.saldo < 0 ? 'text-red-500' : 'text-ligra-main'}">${fmtCurrency(s.saldo)}</td>
                                 <td class="p-4">
                                     <div class="flex justify-center gap-2">
@@ -527,7 +515,6 @@ function renderTeacherStudents() {
     `;
 }
 
-// CARREGAR/SINCRONIZAR ALUNOS E SALDOS (CSV)
 async function handleCSVUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -564,16 +551,13 @@ async function handleCSVUpload(event) {
                 const email = cols[emailIdx];
                 const turmaStr = turmaIdx !== -1 ? cols[turmaIdx] : null;
                 
-                // Tratar a coluna do valor (substituir vírgula por ponto para parse correto)
                 const valorStr = valorIdx !== -1 && cols[valorIdx] ? cols[valorIdx].replace(',', '.') : '0';
                 const valor = parseFloat(valorStr) || 0;
 
-                // Verificação base: o e-mail tem de existir e ser do domínio do SESI
                 if (email && email.endsWith('@portalsesisp.org.br')) {
                     const existingStudent = appState.users.find(u => u.email === email && u.role === 'student');
 
                     if (existingStudent) {
-                        // 1. O Aluno já existe. Apenas atualizamos o saldo, se necessário.
                         if (valor !== 0) {
                             const novoSaldo = existingStudent.saldo + valor;
                             updates.push({ id: existingStudent.id, saldo: novoSaldo });
@@ -586,8 +570,6 @@ async function handleCSVUpload(event) {
                             });
                         }
                     } else {
-                        // 2. O Aluno NÃO existe. Precisamos criar.
-                        // Para criar, exigimos que haja um NOME preenchido na linha.
                         if (nome) {
                             const newId = generateId();
                             newUsers.push({ 
@@ -596,11 +578,10 @@ async function handleCSVUpload(event) {
                                 nome: nome, 
                                 email: email, 
                                 password: '123', 
-                                saldo: valor > 0 ? valor : 0, // Ignoramos valores iniciais negativos em contas novas
+                                saldo: valor > 0 ? valor : 0, 
                                 turma: turmaStr 
                             });
                             
-                            // Se já começou com saldo positivo, regista no log da conta dele
                             if (valor > 0) {
                                 transactions.push({
                                     id: generateId(),
@@ -611,7 +592,6 @@ async function handleCSVUpload(event) {
                                 });
                             }
                         } else {
-                            // Encontrou e-mail que não existe no DB, mas não tem nome para poder criar.
                             notFoundSemNome++;
                         }
                     }
@@ -619,18 +599,15 @@ async function handleCSVUpload(event) {
             }
         }
 
-        // Executar todas as operações necessárias no banco de dados (Supabase)
         let promises = [];
         
         if (newUsers.length > 0) {
             promises.push(supabaseClient.from('users').insert(newUsers));
         }
-        
         if (updates.length > 0) {
             const updatePromises = updates.map(u => supabaseClient.from('users').update({ saldo: u.saldo }).eq('id', u.id));
             promises.push(...updatePromises);
         }
-        
         if (transactions.length > 0) {
             promises.push(supabaseClient.from('transacoes').insert(transactions));
         }
@@ -679,22 +656,52 @@ function renderTeacherStore() {
 }
 
 function renderTeacherRequests() {
-    const pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    
+    // Adicionado filtro de turmas também na visão de solicitações do professor
+    let pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
+    
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        pendentes = pendentes.filter(s => {
+            const aluno = appState.users.find(u => u.id === s.aluno_id);
+            return aluno && aluno.turma === appState.filtroTurma;
+        });
+    }
+
     return `
     <div class="fade-in space-y-4 md:space-y-6 w-full">
-        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('pending_req')}</h1>
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('pending_req')}</h1>
+            
+            <div class="flex flex-col sm:flex-row gap-2">
+                <!-- Botão de Atualização manual para evitar ter de dar F5 na página -->
+                <button onclick="refreshData().then(render)" class="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors btn-press">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar Pedidos
+                </button>
+                <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full md:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm shadow-sm bg-white">
+                    <option value="todas">Todas as Turmas</option>
+                    ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
             <div class="overflow-x-auto w-full rounded-2xl">
                 <table class="w-full text-left whitespace-nowrap min-w-[600px]">
                     <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th></tr></thead>
                     <tbody class="divide-y divide-gray-100">
-                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">Sem solicitações</td></tr>` : ''}
+                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">Sem solicitações pendentes.</td></tr>` : ''}
                         ${pendentes.map(s => {
                             const aluno = appState.users.find(u => u.id === s.aluno_id);
                             const item = appState.loja.find(i => i.id === s.item_id);
                             return `
                             <tr class="hover:bg-gray-50">
-                                <td class="p-4 font-bold text-gray-800">${aluno?.nome || 'Desconhecido'}</td><td class="p-4 font-bold text-ligra-main">${item?.nome || 'Desconhecido'}</td><td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
+                                <td class="p-4">
+                                    <p class="font-bold text-gray-800">${aluno?.nome || 'Desconhecido'}</p>
+                                    ${aluno?.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md mt-1 inline-block">${aluno.turma}</span>` : ''}
+                                </td>
+                                <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Desconhecido'}</td>
+                                <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
                                 <td class="p-4"><div class="flex justify-center gap-2"><button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button><button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button></div></td>
                             </tr>`;
                         }).join('')}
@@ -762,7 +769,6 @@ function renderStudentDashboard() {
     <div class="fade-in space-y-6">
         <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
         <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-6 md:p-8 rounded-3xl shadow-lg text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden gap-4">
-            <!-- Saldo em vermelho mais suave se for menor que 0 para contraste com o fundo azul escuro -->
             <div class="z-10"><p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p><h2 class="text-4xl md:text-5xl font-black mt-2 ${u.saldo < 0 ? 'text-red-400' : 'text-ligra-accent'}">${fmtCurrency(u.saldo)}</h2></div>
             <i data-lucide="wallet" class="w-16 h-16 opacity-20 absolute right-4 bottom-4 md:relative md:opacity-50"></i>
         </div>
@@ -811,18 +817,40 @@ function renderStudentStore() {
     </div>`;
 }
 
+// ATUALIZADO: Verificação severa de Erros na compra
 async function buyItem(itemId, price) {
     const user = appState.currentUser;
     if (user.saldo < price) { toast(t('no_funds'), 'error'); return; }
     showLoading();
+    
     const newSaldo = user.saldo - price;
-    await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', user.id);
+    
+    // 1. Atualizar Saldo do Aluno
+    const { error: err1 } = await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', user.id);
+    if (err1) {
+        hideLoading();
+        toast('Erro no Supabase ao descontar saldo.', 'error');
+        console.error(err1);
+        return;
+    }
+    
+    // 2. Registar Transação
     await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: user.id, tipo: 'debito', valor: price, descricao: 'Pedido de compra na loja' }]);
-    await supabaseClient.from('solicitacoes_item').insert([{ id: generateId(), aluno_id: user.id, item_id: itemId, preco_pago: price, status: 'pendente' }]);
-    toast(t('success_buy'));
-    await refreshData();
+    
+    // 3. Registar Solicitação
+    const { error: err2 } = await supabaseClient.from('solicitacoes_item').insert([{ id: generateId(), aluno_id: user.id, item_id: itemId, preco_pago: price, status: 'pendente' }]);
+    
     hideLoading();
-    render();
+
+    // Se houve erro no Supabase na criação da solicitação
+    if (err2) {
+        toast('Ocorreu um erro grave no Banco de Dados (Tabela solicitacoes_item)!', 'error');
+        console.error(err2);
+    } else {
+        toast(t('success_buy'));
+        await refreshData();
+        render();
+    }
 }
 
 function renderStudentItems() {
@@ -903,7 +931,7 @@ async function execFundos(id, tipo) {
     const u = appState.users.find(x => x.id === id);
     let newSaldo = u.saldo;
     if(tipo === 'credito') newSaldo += v;
-    else { newSaldo -= v; } // Removida a trava que limitava o débito, permitindo negativar a conta.
+    else { newSaldo -= v; }
     
     await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', id);
     await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: id, tipo, valor: v, descricao: d }]);
