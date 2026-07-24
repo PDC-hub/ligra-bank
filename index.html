@@ -621,6 +621,34 @@ function renderTeacherStudents() {
     `;
 }
 
+// ============================================
+// FUNÇÃO PARA EXCLUIR ALUNO DO SUPABASE
+// ============================================
+async function excluirAluno(id) {
+    // 1. Confirmação de segurança para evitar exclusões acidentais
+    if (confirm('Tem certeza de que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
+        showLoading();
+        
+        // 2. Apaga o registo do aluno na tabela 'users' do Supabase
+        const { error } = await supabaseClient
+            .from('users')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Erro ao excluir aluno:', error);
+            toast('Erro ao excluir aluno do Supabase.', 'error');
+        } else {
+            toast('Aluno excluído com sucesso!');
+        }
+
+        // 3. Recarrega os dados atualizados do banco e redesenha a tela
+        await refreshData();
+        hideLoading();
+        render();
+    }
+}
+
 async function handleCSVUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
