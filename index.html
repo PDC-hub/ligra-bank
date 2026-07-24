@@ -1136,7 +1136,6 @@ async function execAddItem() {
     const desc = $('#iDesc').value;
     const preco = parseFloat($('#iPreco').value);
     if(!nome || !preco) return;
-    
     showLoading();
     await supabaseClient.from('loja').insert([{ id: generateId(), nome, descricao: desc, preco_base: preco }]);
     
@@ -1147,7 +1146,6 @@ async function execAddItem() {
     render();
 }
 
-// Init (Render Login Screen)
 render();
 </script>
 </body>
