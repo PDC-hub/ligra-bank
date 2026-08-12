@@ -60,6 +60,913 @@ let appState = {
     currentUser: null,
     currentView: 'dashboard',
     filtroTurma: 'todas',
+    ordemAlunos: 'A-Z', // NOVO: Guarda a ordem escolhida pelo professor
+    users: [],
+    transacoes: [],
+    loja: [],
+    solicitacoes: [],
+    inflacaoHistorico: []
+};
+
+// Funções Auxiliares para Inflação por Turma
+function getInflationForTurma(turma) {
+    if (!turma || turma === 'todas') return 1.0;
+    const hist = appState.inflacaoHistorico.filter(h => h.turma === turma);
+    return hist.length > 0 ? hist[hist.length - 1].taxa : 1.0;
+}
+
+function getInflationHistoryForTurma(turma) {
+    return appState.inflacaoHistorico.filter(h => turma === 'todas' ? !h.turma : h.turma === turma);
+}
+
+const translations = {
+    en: {
+        login_btn: "Login", lang_toggle: "Mudar para Português",
+        nav_dashboard: "Dashboard", nav_students: "Students", nav_store: "Store", nav_requests: "Requests", nav_mystore: "Store", nav_myitems: "My Items", nav_history: "History", logout: "Logout"
+    },
+    pt: {
+        slogan: "Onde o seu investimento rende um pouco mais",
+        login_title: "Bem-vindo ao LigraBank", email: "Usuário / E-mail", password: "Senha", login_btn: "Entrar", lang_toggle: "Switch to English",
+        nav_dashboard: "Painel", nav_students: "Alunos", nav_store: "Gerenciar Loja", nav_requests: "Solicitações", nav_mystore: "Lojinha", nav_myitems: "Meus Itens", nav_history: "Histórico", logout: "Sair",
+        total_economy: "Economia Total", inflation_ctrl: "Controle Econômico", inflation_desc: "Ajuste os preços da loja.", update_economy: "Atualizar Economia",
+        add_student: "Novo Aluno", import_csv: "Importar CSV", balance: "Saldo", add_funds: "Creditar", sub_funds: "Debitar",
+        add_item: "Novo Item", base_price: "Preço Base", store_catalog: "Catálogo da Loja", buy: "Comprar",
+        pending_req: "Solicitações Pendentes", approve: "Aprovar", deny: "Rejeitar",
+        hello: "Olá", my_balance: "Meu Saldo", change_pass: "Mudar Minha Senha", new_pass: "Nova Senha", save: "Salvar",
+        acquired_items: "Meus Itens Adquiridos", pending_items: "Minhas Solicitações Pendentes",
+        confirm: "Confirmar", cancel: "Cancelar", reason: "Motivo / Descrição", amount: "Valor", success_buy: "Solicitação enviada!", no_funds: "Saldo insuficiente!"
+    }
+};
+
+const t = (key) => translations[appState.lang][key] || key;
+const $ = selector => document.querySelector(selector);
+
+function showLoading() { $('#global-loader').classList.remove('hidden'); }
+function hideLoading() { $('#global-loader').classList.add('hidden'); }
+function fmtCurrency(valor) { return `LM$ ${parseFloat(valor || 0).toFixed(2)}`; }
+function toggleLang() { appState.lang = appState.lang === 'en' ? 'pt' : 'en'; render(); }
+function toast(msg, type = 'success') {
+    const container = $('#toast-container');
+    const toast = document.createElement('div');
+    toast.className = `${type === 'success' ? 'bg-green-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-red-500'} text-white px-6 py-3 rounded-lg shadow-lg font-bold fade-in`;
+    toast.innerText = msg;
+    container.appendChild(toast);
+    setTimeout(() => { toast.remove(); }, 3000);
+}
+function showModal(content) {
+    $('#modal-container').innerHTML = `
+        <div class="fixed inset-0 modal-overlay z-40 flex items-center justify-center p-4 fade-in" onclick="closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+                ${content}
+            </div>
+        </div>
+    `;
+    lucide.createIcons();
+}
+function closeModal() { $('#modal-container').innerHTML = ''; }
+function changeView(view) { appState.currentView = view; render(); }
+
+// ============================================
+// 2. AUTH & DB FETCH
+// ============================================
+async function handleLogin(e) {
+    e.preventDefault();
+    const email = $('#loginEmail').value.trim();
+    const pass = $('#loginPass').value;
+    showLoading();
+    const { data: users, error } = await supabaseClient.from('users').select('*').eq('email', email).eq('password', pass).limit(1);
+    const user = users && users.length > 0 ? users[0] : null;
+    if (error || !user) { hideLoading(); toast('Credenciais inválidas', 'error'); return; }
+    appState.currentUser = user;
+    appState.currentView = 'dashboard';
+    await refreshData();
+    hideLoading();
+    render();
+}
+
+function handleLogout() { appState.currentUser = null; render(); }
+
+async function refreshData() {
+    if (!appState.currentUser) return;
+    const uId = appState.currentUser.id;
+    const role = appState.currentUser.role;
+
+    try {
+        const { data: loja } = await supabaseClient.from('loja').select('*');
+        appState.loja = loja || [];
+
+        const { data: hist } = await supabaseClient.from('inflacao_historico').select('*').order('created_at', { ascending: true });
+        appState.inflacaoHistorico = hist || [];
+
+        if (role === 'teacher') {
+            const { data: users } = await supabaseClient.from('users').select('*').eq('role', 'student');
+            appState.users = users || [];
+            const { data: transacoes } = await supabaseClient.from('transacoes').select('*');
+            appState.transacoes = transacoes || [];
+            const { data: solicitacoes } = await supabaseClient.from('solicitacoes_item').select('*');
+            appState.solicitacoes = solicitacoes || [];
+        } else {
+            const { data: userData } = await supabaseClient.from('users').select('saldo, turma').eq('id', uId).limit(1);
+            if (userData && userData.length > 0) {
+                appState.currentUser.saldo = userData[0].saldo;
+                appState.currentUser.turma = userData[0].turma;
+            }
+            const { data: transacoes } = await supabaseClient.from('transacoes').select('*').eq('aluno_id', uId);
+            appState.transacoes = transacoes || [];
+            const { data: solicitacoes } = await supabaseClient.from('solicitacoes_item').select('*').eq('aluno_id', uId);
+            appState.solicitacoes = solicitacoes || [];
+        }
+    } catch (err) {
+        toast('Falha ao carregar dados', 'error');
+        console.error(err);
+    }
+}
+
+// ============================================
+// 3. LAYOUT GERAL & MENU
+// ============================================
+function render() {
+    const root = $('#root');
+    if (!appState.currentUser) {
+        root.innerHTML = renderLoginScreen();
+    } else {
+        const role = appState.currentUser.role;
+        const view = appState.currentView;
+        
+        const mobileOptions = role === 'teacher' ? `
+            <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
+            <option value="students" ${view === 'students' ? 'selected' : ''}>${t('nav_students')}</option>
+            <option value="store" ${view === 'store' ? 'selected' : ''}>${t('nav_store')}</option>
+            <option value="requests" ${view === 'requests' ? 'selected' : ''}>${t('nav_requests')}</option>
+            <option value="transactions" ${view === 'transactions' ? 'selected' : ''}>Log / Extrato</option>
+        ` : `
+            <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
+            <option value="mystore" ${view === 'mystore' ? 'selected' : ''}>${t('nav_mystore')}</option>
+            <option value="myitems" ${view === 'myitems' ? 'selected' : ''}>${t('nav_myitems')}</option>
+            <option value="history" ${view === 'history' ? 'selected' : ''}>${t('nav_history')}</option>
+        `;
+
+        root.innerHTML = `
+            ${renderSidebar()}
+            <main class="flex-1 flex flex-col h-full bg-gray-50 overflow-y-auto w-full overflow-x-hidden">
+                <header class="md:hidden bg-white p-4 border-b border-gray-200 flex justify-between items-center shadow-sm sticky top-0 z-20">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-ligra-main rounded-lg flex items-center justify-center text-white"><i data-lucide="piggy-bank" class="w-5 h-5"></i></div>
+                        <span class="font-black text-lg text-ligra-dark">LigraBank</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark">${mobileOptions}</select>
+                    </div>
+                </header>
+                <header class="hidden md:flex bg-white p-4 border-b border-gray-200 justify-end items-center shadow-sm gap-4">
+                    <div class="font-black text-ligra-dark">${appState.currentUser.nome} ${appState.currentUser.turma ? `(${appState.currentUser.turma})` : ''}</div>
+                </header>
+                <div class="p-4 md:p-6 max-w-5xl mx-auto w-full">${renderMainContent()}</div>
+            </main>
+        `;
+    }
+    lucide.createIcons();
+    renderCharts();
+}
+
+function renderCharts() {
+    const ctx = document.getElementById('inflationChart');
+    if (!ctx) return;
+    if (window.inflationChartInstance) window.inflationChartInstance.destroy();
+
+    const role = appState.currentUser.role;
+    const turmaAlvo = role === 'teacher' ? appState.filtroTurma : appState.currentUser.turma;
+    const histData = getInflationHistoryForTurma(turmaAlvo);
+
+    const labels = histData.map(h => {
+        const d = new Date(h.created_at);
+        return `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    });
+    const data = histData.map(h => h.taxa);
+    
+    window.inflationChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Taxa de Inflação',
+                data: data.length ? data : [1.0], // Fallback visual
+                borderColor: '#8B5CF6',
+                backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                borderWidth: 3, tension: 0.3, fill: true, pointBackgroundColor: '#8B5CF6', pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: false, min: 0.5, max: 2.5 } }
+        }
+    });
+}
+
+function renderLoginScreen() {
+    return `
+    <div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-ligra-light p-4">
+        <div class="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md text-center">
+            <div class="w-20 h-20 bg-ligra-main text-white rounded-2xl mx-auto flex items-center justify-center shadow-lg mb-4"><i data-lucide="piggy-bank" class="w-12 h-12"></i></div>
+            <h1 class="text-3xl font-black text-ligra-dark">LigraBank</h1>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest mt-1 mb-8">"${t('slogan')}"</p>
+            <form onsubmit="handleLogin(event)" class="space-y-4">
+                <input type="text" id="loginEmail" placeholder="${t('email')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                <input type="password" id="loginPass" placeholder="${t('password')}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                <button type="submit" class="w-full py-3 rounded-xl bg-ligra-main text-white font-black text-lg shadow-md hover:bg-blue-600 btn-press">${t('login_btn')}</button>
+            </form>
+        </div>
+    </div>
+    `;
+}
+
+function renderSidebar() {
+    const role = appState.currentUser.role;
+    let links = role === 'teacher' ? `
+        ${navItem('dashboard', t('nav_dashboard'), 'layout-dashboard')}
+        ${navItem('students', t('nav_students'), 'users')}
+        ${navItem('store', t('nav_store'), 'store')}
+        ${navItem('requests', t('nav_requests'), 'shopping-bag')}
+        ${navItem('transactions', 'Log / Extrato', 'list')}
+    ` : `
+        ${navItem('dashboard', t('nav_dashboard'), 'user')}
+        ${navItem('mystore', t('nav_mystore'), 'shopping-cart')}
+        ${navItem('myitems', t('nav_myitems'), 'package')}
+        ${navItem('history', t('nav_history'), 'clock')}
+    `;
+    return `
+    <aside class="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shadow-sm">
+        <div class="p-6 border-b border-gray-100 flex items-center gap-3">
+            <div class="w-10 h-10 bg-ligra-main rounded-xl flex items-center justify-center text-white"><i data-lucide="piggy-bank" class="w-6 h-6"></i></div>
+            <div><h1 class="font-black text-xl text-ligra-dark tracking-tight">LigraBank</h1><p class="text-[10px] text-gray-400 font-bold uppercase">${role}</p></div>
+        </div>
+        <nav class="flex-1 p-4 space-y-2">${links}</nav>
+        <div class="p-4 border-t border-gray-100"><button onclick="handleLogout()" class="w-full flex items-center gap-3 px-4 py-3 text-red-500 rounded-xl hover:bg-red-50 font-bold transition-colors"><i data-lucide="log-out" class="w-5 h-5"></i> Sair</button></div>
+    </aside>`;
+}
+
+function navItem(view, label, icon) {
+    const isActive = appState.currentView === view;
+    return `
+        <button onclick="changeView('${view}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${isActive ? 'bg-blue-50 text-ligra-main' : 'text-gray-500 hover:bg-gray-50'}">
+            <i data-lucide="${icon}" class="w-5 h-5"></i> ${label}
+        </button>`;
+}
+
+function renderMainContent() {
+    const view = appState.currentView;
+    const role = appState.currentUser.role;
+    if (role === 'teacher') {
+        if (view === 'dashboard') return renderTeacherDashboard();
+        if (view === 'students') return renderTeacherStudents();
+        if (view === 'store') return renderTeacherStore();
+        if (view === 'requests') return renderTeacherRequests();
+        if (view === 'transactions') return renderTeacherTransactions();
+    } else {
+        if (view === 'dashboard') return renderStudentDashboard();
+        if (view === 'mystore') return renderStudentStore();
+        if (view === 'myitems') return renderStudentItems();
+        if (view === 'history') return renderStudentHistory();
+    }
+    return '';
+}
+
+// ============================================
+// 4. TEACHER VIEWS & ACTIONS
+// ============================================
+function renderTeacherDashboard() {
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    let filtrados = appState.users;
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
+    }
+    const totalEco = filtrados.reduce((sum, u) => sum + (u.saldo || 0), 0);
+    const currentInf = getInflationForTurma(appState.filtroTurma);
+
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_dashboard')}</h1>
+            <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm bg-white shadow-sm">
+                <option value="todas">Todas as Turmas</option>
+                ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+            </select>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-ligra-main">
+                <p class="text-sm font-bold text-gray-400 uppercase">${appState.filtroTurma === 'todas' ? t('total_economy') : 'Economia da Turma'}</p>
+                <h2 class="text-3xl md:text-4xl font-black mt-2 ${totalEco < 0 ? 'text-red-500' : 'text-ligra-dark'}">${fmtCurrency(totalEco)}</h2>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-green-500">
+                <p class="text-sm font-bold text-gray-400 uppercase">${appState.filtroTurma === 'todas' ? 'Total Students' : 'Alunos na Turma'}</p>
+                <h2 class="text-3xl md:text-4xl font-black text-green-600 mt-2">${filtrados.length}</h2>
+            </div>
+        </div>
+        
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
+            <div class="flex items-center gap-3 mb-2"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">${t('inflation_ctrl')}</h2></div>
+            
+            ${appState.filtroTurma === 'todas' 
+            ? `<div class="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-xl font-medium mt-4">
+                 ⚠️ Selecione uma turma específica no filtro acima para gerir a sua Inflação e ver o seu Gráfico.
+               </div>` 
+            : `
+            <p class="text-sm font-medium text-gray-500 mb-6">Ajuste os preços da loja exclusivamente para a turma <span class="font-bold text-gray-800">${appState.filtroTurma}</span>.</p>
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                <div class="flex-1 w-full"><input type="range" id="inflationSlider" min="0.5" max="2.0" step="0.1" value="${currentInf}" oninput="document.getElementById('infVal').innerText = 'x' + parseFloat(this.value).toFixed(1)" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"></div>
+                <div class="bg-purple-100 text-purple-700 px-4 py-2 rounded-xl font-black text-xl" id="infVal">x${currentInf.toFixed(1)}</div>
+                <button onclick="updateInflation()" class="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-6 py-3 rounded-xl font-bold btn-press">${t('update_economy')}</button>
+            </div>
+            <div class="mt-8 pt-6 border-t border-gray-100">
+                <h3 class="text-sm font-bold text-gray-400 uppercase mb-4">Histórico de Flutuação (${appState.filtroTurma})</h3>
+                <div class="h-64 w-full"><canvas id="inflationChart"></canvas></div>
+            </div>
+            `}
+        </div>
+    </div>
+    `;
+}
+
+async function updateInflation() {
+    if (appState.filtroTurma === 'todas') return;
+    const novaTaxa = parseFloat($('#inflationSlider').value);
+    const atual = getInflationForTurma(appState.filtroTurma);
+    if (novaTaxa === atual) return;
+    
+    showLoading();
+    const { error } = await supabaseClient.from('inflacao_historico').insert([{
+        id: generateId(), taxa: novaTaxa, turma: appState.filtroTurma
+    }]);
+    
+    if (error) console.error(error);
+    else toast(`Inflação da turma ${appState.filtroTurma} atualizada!`);
+    
+    await refreshData();
+    hideLoading();
+    render();
+}
+
+// ==== NOVO: TABELA DE ALUNOS COM ORDENAÇÃO A-Z / Z-A ====
+function renderTeacherStudents() {
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    
+    // 1. Aplica o filtro de turma
+    let filtrados = appState.users;
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        filtrados = filtrados.filter(u => u.turma === appState.filtroTurma);
+    }
+
+    // 2. Aplica a ordenação alfabética (A-Z ou Z-A)
+    filtrados.sort((a, b) => {
+        const nomeA = (a.nome || '').toUpperCase();
+        const nomeB = (b.nome || '').toUpperCase();
+        if (appState.ordemAlunos === 'Z-A') {
+            return nomeB.localeCompare(nomeA);
+        }
+        return nomeA.localeCompare(nomeB); // Padrão: A-Z
+    });
+
+    return `
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_students')}</h1>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <label class="text-center justify-center bg-gray-800 hover:bg-gray-900 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2 text-sm">
+                    <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Sincronizar (Alunos/Saldos CSV)
+                    <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+                </label>
+            </div>
+        </div>
+        
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+            <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center w-full">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <span class="font-bold text-gray-600 text-sm">Turma:</span>
+                    <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm">
+                        <option value="todas">Todas</option>
+                        ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <span class="font-bold text-gray-600 text-sm">Ordem:</span>
+                    <select onchange="appState.ordemAlunos = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm">
+                        <option value="A-Z" ${appState.ordemAlunos === 'A-Z' ? 'selected' : ''}>A a Z</option>
+                        <option value="Z-A" ${appState.ordemAlunos === 'Z-A' ? 'selected' : ''}>Z a A</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[700px]">
+                    <thead class="bg-gray-50">
+                        <tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">${t('balance')}</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Actions</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${filtrados.length === 0 ? `<tr><td colspan="3" class="p-6 text-center text-gray-400">Nenhum aluno encontrado</td></tr>` : ''}
+                        ${filtrados.map(s => `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4">
+                                    <div class="flex items-center gap-2"><p class="font-bold text-gray-800">${s.nome}</p>${s.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md">${s.turma}</span>` : ''}</div>
+                                    <p class="text-xs text-gray-400 mt-0.5">${s.email}</p>
+                                </td>
+                                <td class="p-4 text-right font-black ${s.saldo < 0 ? 'text-red-500' : 'text-ligra-main'}">${fmtCurrency(s.saldo)}</td>
+                                <td class="p-4">
+                                    <div class="flex justify-center gap-1 sm:gap-2">
+                                        <button onclick="modalInventario('${s.id}')" class="px-3 py-2 md:py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-bold hover:bg-purple-200 transition-colors" title="Inventário / Consumir Itens"><i data-lucide="backpack" class="w-4 h-4 md:w-3 md:h-3"></i></button>
+                                        <button onclick="modalFundos('${s.id}', 'credito')" class="px-3 py-2 md:py-1.5 bg-green-100 text-green-700 rounded-lg text-xs font-bold hover:bg-green-200" title="Creditar">+ ${t('add_funds')}</button>
+                                        <button onclick="modalFundos('${s.id}', 'debito')" class="px-3 py-2 md:py-1.5 bg-red-100 text-red-700 rounded-lg text-xs font-bold hover:bg-red-200" title="Debitar">- ${t('sub_funds')}</button>
+                                        <button onclick="modalResetPass('${s.id}')" class="px-3 py-2 md:py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300" title="Repor Senha"><i data-lucide="key" class="w-4 h-4 md:w-3 md:h-3"></i></button>
+                                        <button onclick="excluirAluno('${s.id}')" class="px-3 py-2 md:py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-200 transition-colors" title="Excluir Aluno"><i data-lucide="trash-2" class="w-4 h-4 md:w-3 md:h-3"></i></button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+async function handleCSVUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    showLoading();
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/);
+        let newUsers = [], updates = [], transactions = [], notFoundSemNome = 0;
+        if (lines.length > 0) {
+            const delimiter = lines[0].includes(';') ? ';' : ',';
+            const headers = lines[0].toLowerCase().split(delimiter).map(h => h?.trim());
+            let nomeIdx = headers.indexOf('nome'); let emailIdx = headers.indexOf('email');
+            let turmaIdx = headers.indexOf('turma'); if (turmaIdx === -1) turmaIdx = headers.indexOf('grupo');
+            let valorIdx = headers.indexOf('valor'); if (valorIdx === -1) valorIdx = headers.indexOf('saldo');
+            if (nomeIdx === -1) nomeIdx = 0; if (emailIdx === -1) emailIdx = 1;
+
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const cols = lines[i].split(delimiter).map(s => s?.trim());
+                const nome = cols[nomeIdx]; const email = cols[emailIdx]; const turmaStr = turmaIdx !== -1 ? cols[turmaIdx] : null;
+                const valorStr = valorIdx !== -1 && cols[valorIdx] ? cols[valorIdx].replace(',', '.') : '0';
+                const valor = parseFloat(valorStr) || 0;
+
+                if (email && email.endsWith('@portalsesisp.org.br')) {
+                    const existingStudent = appState.users.find(u => u.email === email && u.role === 'student');
+                    if (existingStudent) {
+                        if (valor !== 0) {
+                            const novoSaldo = existingStudent.saldo + valor;
+                            updates.push({ id: existingStudent.id, saldo: novoSaldo });
+                            transactions.push({ id: generateId(), aluno_id: existingStudent.id, tipo: valor > 0 ? 'credito' : 'debito', valor: Math.abs(valor), descricao: 'Atualização via CSV' });
+                        }
+                    } else {
+                        if (nome) {
+                            const newId = generateId();
+                            newUsers.push({ id: newId, role: 'student', nome: nome, email: email, password: '123', saldo: valor > 0 ? valor : 0, turma: turmaStr });
+                            if (valor > 0) transactions.push({ id: generateId(), aluno_id: newId, tipo: 'credito', valor: valor, descricao: 'Depósito inicial via CSV' });
+                        } else notFoundSemNome++;
+                    }
+                }
+            }
+        }
+        let promises = [];
+        if (newUsers.length > 0) promises.push(supabaseClient.from('users').insert(newUsers));
+        if (updates.length > 0) {
+            const updatePromises = updates.map(u => supabaseClient.from('users').update({ saldo: u.saldo }).eq('id', u.id));
+            promises.push(...updatePromises);
+        }
+        if (transactions.length > 0) promises.push(supabaseClient.from('transacoes').insert(transactions));
+        if (promises.length > 0) { await Promise.all(promises); toast(`${newUsers.length} novos alunos e ${updates.length} atualizados!`); if (notFoundSemNome > 0) toast(`${notFoundSemNome} ignorados (sem nome).`, 'warning'); } 
+        else toast('Nenhuma alteração válida encontrada.', 'warning');
+        await refreshData(); hideLoading(); render(); event.target.value = '';
+    };
+    reader.readAsText(file);
+}
+
+async function excluirAluno(id) {
+    if (confirm('Tem certeza de que deseja excluir este aluno? Esta ação não pode ser desfeita.')) {
+        showLoading();
+        const { error } = await supabaseClient.from('users').delete().eq('id', id);
+        if (!error) toast('Aluno excluído com sucesso!');
+        await refreshData(); hideLoading(); render();
+    }
+}
+
+function renderTeacherStore() {
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    
+    let lojaFiltrada = appState.loja;
+    if (appState.filtroTurma !== 'todas') {
+        lojaFiltrada = appState.loja.filter(i => i.turma === appState.filtroTurma);
+    } else {
+        lojaFiltrada = appState.loja.filter(i => !i.turma);
+    }
+
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('store_catalog')}</h1>
+            
+            <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full sm:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm bg-white shadow-sm">
+                    <option value="todas">Geral (Itens sem turma)</option>
+                    ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+                
+                ${appState.filtroTurma !== 'todas' ? 
+                `<button onclick="modalAddItem()" class="bg-ligra-main hover:bg-blue-600 text-white px-4 py-2 rounded-xl font-bold btn-press flex justify-center items-center gap-2"><i data-lucide="plus" class="w-4 h-4"></i> ${t('add_item')}</button>` 
+                : ''}
+            </div>
+        </div>
+        
+        ${appState.filtroTurma === 'todas' 
+        ? `<div class="bg-yellow-50 border border-yellow-200 text-yellow-700 p-4 rounded-xl font-medium">
+             ⚠️ Agora cada turma possui a sua própria loja! Selecione uma turma específica no filtro acima para ver, adicionar ou editar itens. <br>Abaixo estão listados apenas itens antigos (Gerais).
+           </div>` 
+        : ''}
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            ${lojaFiltrada.map(item => `
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between relative group">
+                    <div>
+                        <div class="w-12 h-12 bg-blue-50 text-ligra-main rounded-xl flex items-center justify-center mb-4"><i data-lucide="package" class="w-6 h-6"></i></div>
+                        <h3 class="font-black text-lg text-gray-800 pr-8">${item.nome}</h3>
+                        <p class="text-sm text-gray-500 mt-1">${item.descricao}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-bold text-gray-400 uppercase">${t('base_price')}</span>
+                            <div class="font-black text-lg text-gray-800">${fmtCurrency(item.preco_base)}</div>
+                        </div>
+                        <button onclick="modalEditItem('${item.id}')" class="bg-gray-100 text-gray-500 hover:bg-ligra-main hover:text-white p-2.5 rounded-lg transition-colors btn-press shadow-sm"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            `).join('')}
+            ${lojaFiltrada.length === 0 && appState.filtroTurma !== 'todas' ? `<div class="col-span-full text-center py-10 text-gray-400 font-bold">Esta turma ainda não tem itens na loja.</div>` : ''}
+        </div>
+    </div>`;
+}
+
+function renderTeacherRequests() {
+    const todasTurmas = [...new Set(appState.users.map(u => u.turma).filter(Boolean))];
+    let pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
+    
+    if (appState.filtroTurma && appState.filtroTurma !== 'todas') {
+        pendentes = pendentes.filter(s => {
+            const aluno = appState.users.find(u => u.id === s.aluno_id);
+            return aluno && aluno.turma === appState.filtroTurma;
+        });
+    }
+
+    return `
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('pending_req')}</h1>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <button onclick="refreshData().then(render)" class="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2 transition-colors btn-press">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i> Atualizar
+                </button>
+                <select onchange="appState.filtroTurma = this.value; render();" class="px-4 py-2 w-full md:w-auto rounded-lg border-2 border-gray-100 font-bold outline-none focus:border-blue-500 text-sm shadow-sm bg-white">
+                    <option value="todas">Todas as Turmas</option>
+                    ${todasTurmas.map(t => `<option value="${t}" ${appState.filtroTurma === t ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[600px]">
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Student</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Item</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Paid</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-center">Action</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${pendentes.length === 0 ? `<tr><td colspan="4" class="p-6 text-center text-gray-400">Sem solicitações.</td></tr>` : ''}
+                        ${pendentes.map(s => {
+                            const aluno = appState.users.find(u => u.id === s.aluno_id);
+                            const item = appState.loja.find(i => i.id === s.item_id);
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4"><p class="font-bold text-gray-800">${aluno?.nome || 'Desconhecido'}</p>${aluno?.turma ? `<span class="bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-md mt-1 inline-block">${aluno.turma}</span>` : ''}</td>
+                                <td class="p-4 font-bold text-ligra-main">${item?.nome || 'Desconhecido'}</td>
+                                <td class="p-4 text-right font-black text-gray-600">${fmtCurrency(s.preco_pago)}</td>
+                                <td class="p-4"><div class="flex justify-center gap-2"><button onclick="handleRequest('${s.id}', 'aprovado')" class="px-4 py-2 bg-green-500 text-white rounded-xl font-bold hover:bg-green-600">${t('approve')}</button><button onclick="handleRequest('${s.id}', 'rejeitado')" class="px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200">${t('deny')}</button></div></td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+function renderTeacherTransactions() {
+    const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    return `
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <div><h1 class="text-2xl md:text-3xl font-black text-gray-800">Log de Transações</h1><p class="text-gray-500 font-medium">Acompanhe todas as operações do sistema.</p></div>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[700px]">
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Data</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Aluno</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Operação</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Descrição</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Valor</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${history.length === 0 ? '<tr><td colspan="5" class="p-6 text-center text-gray-400">Nenhuma transação registada.</td></tr>' : ''}
+                        ${history.map(tr => {
+                            const isCredito = tr.tipo === 'credito';
+                            const isConsumo = tr.tipo === 'consumo';
+                            const aluno = appState.users.find(u => u.id === tr.aluno_id);
+                            const dataStr = new Date(tr.created_at).toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4 text-xs text-gray-400 font-bold">${dataStr}</td>
+                                <td class="p-4 font-bold text-gray-800">${aluno ? aluno.nome : 'Desconhecido'}</td>
+                                <td class="p-4">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : isConsumo ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}">
+                                        <i data-lucide="${isCredito ? 'trending-up' : isConsumo ? 'package-open' : 'trending-down'}" class="w-3 h-3"></i>
+                                        ${isCredito ? 'CRÉDITO' : isConsumo ? 'USO' : 'DÉBITO'}
+                                    </span>
+                                </td>
+                                <td class="p-4 font-bold text-gray-600 truncate max-w-[200px]">${tr.descricao}</td>
+                                <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : isConsumo ? 'text-purple-600' : 'text-red-600'}">
+                                    ${isCredito ? '+' : isConsumo ? '' : '-'} ${isConsumo ? '-' : fmtCurrency(tr.valor)}
+                                </td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+async function handleRequest(reqId, action) {
+    showLoading();
+    const req = appState.solicitacoes.find(s => s.id === reqId);
+    if (!req) { hideLoading(); return; }
+    await supabaseClient.from('solicitacoes_item').update({ status: action }).eq('id', reqId);
+    if (action === 'rejeitado') {
+        const aluno = appState.users.find(u => u.id === req.aluno_id);
+        if(aluno) {
+            const newSaldo = aluno.saldo + parseFloat(req.preco_pago);
+            await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', aluno.id);
+            await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: aluno.id, tipo: 'credito', valor: req.preco_pago, descricao: 'Reembolso' }]);
+        }
+    }
+    toast(`Solicitação ${action === 'aprovado' ? 'Aprovada' : 'Rejeitada'}`);
+    await refreshData(); hideLoading(); render();
+}
+
+// ============================================
+// 5. STUDENT VIEWS & ACTIONS
+// ============================================
+function renderStudentDashboard() {
+    const u = appState.currentUser;
+    return `
+    <div class="fade-in space-y-6">
+        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('hello')}, ${u.nome}! 🎓</h1>
+        <div class="bg-gradient-to-r from-ligra-main to-ligra-dark p-6 md:p-8 rounded-3xl shadow-lg text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden gap-4">
+            <div class="z-10"><p class="text-xs md:text-sm font-bold text-blue-200 uppercase tracking-widest">${t('my_balance')}</p><h2 class="text-4xl md:text-5xl font-black mt-2 ${u.saldo < 0 ? 'text-red-400' : 'text-ligra-accent'}">${fmtCurrency(u.saldo)}</h2></div>
+            <i data-lucide="wallet" class="w-16 h-16 opacity-20 absolute right-4 bottom-4 md:relative md:opacity-50"></i>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mt-6 w-full">
+            <div class="flex items-center gap-3 mb-4"><i data-lucide="trending-up" class="w-6 h-6 text-purple-500"></i><h2 class="text-xl font-black text-gray-800">Termómetro da Turma</h2></div>
+            <p class="text-sm font-medium text-gray-500 mb-6">Acompanha a inflação dos preços na lojinha da tua turma.</p>
+            <div class="h-64 w-full"><canvas id="inflationChart"></canvas></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-ligra-main"></i> ${t('change_pass')}</h3>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-medium">
+                <button onclick="changeOwnPass()" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto btn-press">${t('save')}</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+async function changeOwnPass() {
+    const np = $('#newPass').value;
+    if (np.length < 3) return toast('A senha é demasiado curta', 'warning');
+    showLoading();
+    const { error } = await supabaseClient.from('users').update({ password: np }).eq('id', appState.currentUser.id);
+    hideLoading();
+    if (error) toast('Erro ao atualizar', 'error'); else { appState.currentUser.password = np; toast('Senha atualizada!'); $('#newPass').value = ''; }
+}
+
+function renderStudentStore() {
+    const myInf = getInflationForTurma(appState.currentUser.turma);
+    const minhaLoja = appState.loja.filter(i => i.turma === appState.currentUser.turma || !i.turma);
+
+    return `
+    <div class="fade-in space-y-6">
+        <div class="flex justify-between items-end mb-6"><div><h1 class="text-3xl font-black text-gray-800">Lojinha da Turma 🛒</h1><p class="text-gray-500 font-medium mt-1">Índice de Inflação: <span class="text-purple-500 font-bold">x${myInf.toFixed(1)}</span></p></div></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            ${minhaLoja.map(item => {
+                const finalPrice = item.preco_base * myInf;
+                const canAfford = appState.currentUser.saldo >= finalPrice;
+                return `
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
+                    <div><div class="w-16 h-16 bg-blue-50 text-ligra-main rounded-2xl flex items-center justify-center mb-4"><i data-lucide="gift" class="w-8 h-8"></i></div><h3 class="font-black text-xl text-gray-800">${item.nome}</h3><p class="text-sm text-gray-500 mt-2 font-medium">${item.descricao}</p></div>
+                    <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center"><span class="font-black text-2xl text-gray-800">${fmtCurrency(finalPrice)}</span><button onclick="buyItem('${item.id}', ${finalPrice})" ${!canAfford ? 'disabled' : ''} class="${canAfford ? 'bg-ligra-main hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 cursor-not-allowed'} px-6 py-3 rounded-xl font-bold transition-all shadow-md btn-press">${t('buy')}</button></div>
+                </div>`;
+            }).join('')}
+            ${minhaLoja.length === 0 ? `<div class="col-span-full text-center py-10 text-gray-400 font-bold">A loja da tua turma ainda está vazia.</div>` : ''}
+        </div>
+    </div>`;
+}
+
+async function buyItem(itemId, price) {
+    const user = appState.currentUser;
+    if (user.saldo < price) return toast(t('no_funds'), 'error');
+    showLoading();
+    const newSaldo = user.saldo - price;
+    const { error: err1 } = await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', user.id);
+    if (err1) { hideLoading(); return toast('Erro ao descontar', 'error'); }
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: user.id, tipo: 'debito', valor: price, descricao: 'Compra na loja' }]);
+    const { error: err2 } = await supabaseClient.from('solicitacoes_item').insert([{ id: generateId(), aluno_id: user.id, item_id: itemId, preco_pago: price, status: 'pendente' }]);
+    hideLoading();
+    if (err2) toast('Erro no BD!', 'error'); else { toast(t('success_buy')); await refreshData(); render(); }
+}
+
+function renderStudentItems() {
+    const pendentes = appState.solicitacoes.filter(s => s.status === 'pendente');
+    const aprovados = appState.solicitacoes.filter(s => s.status === 'aprovado');
+    const renderCard = (s, statusTag) => {
+        const item = appState.loja.find(i => i.id === s.item_id);
+        return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                <div class="flex items-center gap-4"><div class="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center"><i data-lucide="package" class="w-5 h-5 text-gray-400"></i></div><div><p class="font-bold text-gray-800">${item?.nome || 'Item removido'}</p><p class="text-xs text-gray-400">${fmtCurrency(s.preco_pago)}</p></div></div>
+                ${statusTag}
+            </div>`;
+    };
+    return `
+    <div class="fade-in space-y-8">
+        <div><h2 class="text-2xl font-black text-gray-800 mb-4">${t('pending_items')}</h2><div class="space-y-3">${pendentes.length === 0 ? '<p class="text-gray-400 italic">Sem itens.</p>' : ''}${pendentes.map(s => renderCard(s, `<span class="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-xs font-bold uppercase">Pendente</span>`)).join('')}</div></div>
+        <div><h2 class="text-2xl font-black text-gray-800 mb-4">${t('acquired_items')}</h2><div class="space-y-3">${aprovados.length === 0 ? '<p class="text-gray-400 italic">Sem itens.</p>' : ''}${aprovados.map(s => renderCard(s, `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold uppercase"><i data-lucide="check" class="w-3 h-3 inline"></i> Adquirido</span>`)).join('')}</div></div>
+    </div>`;
+}
+
+function renderStudentHistory() {
+    const history = appState.transacoes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    return `
+    <div class="fade-in space-y-4 md:space-y-6 w-full">
+        <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_history')}</h1>
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 w-full">
+            <div class="overflow-x-auto w-full rounded-2xl">
+                <table class="w-full text-left whitespace-nowrap min-w-[500px]">
+                    <thead class="bg-gray-50"><tr><th class="p-4 text-xs font-bold text-gray-500 uppercase">Tipo</th><th class="p-4 text-xs font-bold text-gray-500 uppercase">Descrição</th><th class="p-4 text-xs font-bold text-gray-500 uppercase text-right">Valor</th></tr></thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${history.length === 0 ? '<tr><td colspan="3" class="p-6 text-center text-gray-400">Nenhuma transação</td></tr>' : ''}
+                        ${history.map(tr => {
+                            const isCredito = tr.tipo === 'credito'; const isConsumo = tr.tipo === 'consumo';
+                            return `
+                            <tr class="hover:bg-gray-50">
+                                <td class="p-4"><span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold ${isCredito ? 'bg-green-100 text-green-700' : isConsumo ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}"><i data-lucide="${isCredito ? 'trending-up' : isConsumo ? 'package-open' : 'trending-down'}" class="w-3 h-3"></i>${isCredito ? 'GANHO' : isConsumo ? 'USO' : 'GASTO'}</span></td>
+                                <td class="p-4 font-bold text-gray-600 truncate max-w-[150px]">${tr.descricao}</td>
+                                <td class="p-4 text-right font-black ${isCredito ? 'text-green-600' : isConsumo ? 'text-purple-600' : 'text-red-600'}">${isCredito ? '+' : isConsumo ? '' : '-'} ${isConsumo ? '-' : fmtCurrency(tr.valor)}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ============================================
+// 6. MODALS
+// ============================================
+async function modalResetPass(id) {
+    showLoading(); await supabaseClient.from('users').update({ password: '123' }).eq('id', id); toast('Senha reposta para: 123'); hideLoading();
+}
+
+function modalFundos(id, tipo) {
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">${tipo === 'credito' ? t('add_funds') : t('sub_funds')}</h3>
+        <div class="space-y-4">
+            <input type="number" id="fValor" placeholder="${t('amount')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold text-lg">
+            <input type="text" id="fDesc" placeholder="${t('reason')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button><button onclick="execFundos('${id}', '${tipo}')" class="flex-1 py-3 ${tipo === 'credito' ? 'bg-green-500' : 'bg-red-500'} text-white font-bold rounded-xl">${t('confirm')}</button></div>
+    `);
+}
+
+async function execFundos(id, tipo) {
+    const v = parseFloat($('#fValor').value); const d = $('#fDesc').value || 'Trans. manual';
+    if(!v || v <= 0) return; showLoading();
+    const u = appState.users.find(x => x.id === id); let newSaldo = u.saldo;
+    if(tipo === 'credito') newSaldo += v; else newSaldo -= v;
+    await supabaseClient.from('users').update({ saldo: newSaldo }).eq('id', id);
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: id, tipo, valor: v, descricao: d }]);
+    toast('Sucesso!'); closeModal(); await refreshData(); hideLoading(); render();
+}
+
+function modalInventario(alunoId) {
+    const aluno = appState.users.find(u => u.id === alunoId);
+    const itensAprovados = appState.solicitacoes.filter(s => s.aluno_id === alunoId && s.status === 'aprovado');
+    let listaHtml = itensAprovados.length === 0 ? '<p class="text-gray-500 text-sm italic py-4">Este aluno não possui itens.</p>' : itensAprovados.map(s => {
+        const item = appState.loja.find(i => i.id === s.item_id);
+        return `<div class="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100"><div><p class="font-bold text-gray-800 text-sm">${item?.nome || 'Removido'}</p><p class="text-[10px] text-gray-400 font-bold uppercase">Pago: ${fmtCurrency(s.preco_pago)}</p></div><button onclick="execConsumirItem('${s.id}', '${alunoId}')" class="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-xs font-bold btn-press">Consumir</button></div>`;
+    }).join('');
+    showModal(`<div class="flex items-center gap-3 mb-4"><div class="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center"><i data-lucide="backpack" class="w-5 h-5"></i></div><div><h3 class="text-xl font-black text-gray-800">Inventário</h3><p class="text-[10px] text-gray-400 font-bold uppercase">${aluno.nome}</p></div></div><div class="space-y-3 max-h-60 overflow-y-auto">${listaHtml}</div><div class="mt-6 pt-4 border-t border-gray-100"><button onclick="closeModal()" class="w-full py-3 bg-gray-100 text-gray-600 font-bold rounded-xl btn-press">Fechar</button></div>`);
+}
+
+async function execConsumirItem(reqId, alunoId) {
+    showLoading(); const req = appState.solicitacoes.find(s => s.id === reqId); const item = appState.loja.find(i => i.id === req.item_id);
+    await supabaseClient.from('solicitacoes_item').update({ status: 'consumido' }).eq('id', reqId);
+    await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: alunoId, tipo: 'consumo', valor: 0, descricao: `Utilizou: ${item ? item.nome : 'Item'}` }]);
+    toast('Item consumido!'); await refreshData(); hideLoading(); modalInventario(alunoId); render();
+}
+
+function preencherNovoItem() {
+    const select = $('#copiarItemSelect');
+    if(select.value) {
+        const itemObj = JSON.parse(select.value);
+        $('#iNome').value = itemObj.nome; $('#iDesc').value = itemObj.descricao; $('#iPreco').value = itemObj.preco_base;
+    } else {
+        $('#iNome').value = ''; $('#iDesc').value = ''; $('#iPreco').value = '';
+    }
+}
+
+function modalAddItem() {
+    const mapUnicos = new Map(); appState.loja.forEach(i => mapUnicos.set(i.nome, i)); const opcoesItens = Array.from(mapUnicos.values());
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-1">Adicionar Item</h3>
+        <p class="text-sm font-bold text-ligra-main mb-4 uppercase">Turma: ${appState.filtroTurma}</p>
+        <div class="space-y-4">
+            ${opcoesItens.length > 0 ? `<div class="bg-blue-50 p-3 rounded-xl border border-blue-100 mb-4"><label class="text-xs font-bold text-blue-700 uppercase mb-1 block">Copiar de item existente (Opcional):</label><select id="copiarItemSelect" onchange="preencherNovoItem()" class="w-full bg-white px-3 py-2 rounded-lg text-sm font-bold text-gray-700 outline-none border border-blue-200"><option value="">-- Começar do Zero --</option>${opcoesItens.map(i => `<option value='${JSON.stringify({nome: i.nome, descricao: i.descricao, preco_base: i.preco_base})}'>${i.nome} (${fmtCurrency(i.preco_base)})</option>`).join('')}</select></div>` : ''}
+            <input type="text" id="iNome" placeholder="Nome do Item" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="iDesc" placeholder="Descrição" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="number" id="iPreco" placeholder="${t('base_price')}" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl">${t('cancel')}</button><button onclick="execAddItem()" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl">${t('confirm')}</button></div>
+    `);
+}
+
+async function execAddItem() {
+    const nome = $('#iNome').value; const desc = $('#iDesc').value; const preco = parseFloat($('#iPreco').value);
+    if(!nome || !preco) return; showLoading();
+    await supabaseClient.from('loja').insert([{ id: generateId(), nome, descricao: desc, preco_base: preco, turma: appState.filtroTurma }]);
+    toast('Item adicionado à loja desta turma!'); closeModal(); await refreshData(); hideLoading(); render();
+}
+
+function modalEditItem(id) {
+    const item = appState.loja.find(i => i.id === id); if(!item) return;
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">Editar Item</h3>
+        <div class="space-y-4">
+            <input type="text" id="eNome" value="${item.nome}" placeholder="Nome do Item" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="eDesc" value="${item.descricao}" placeholder="Descrição" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="number" id="ePreco" value="${item.preco_base}" placeholder="Preço Base" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6"><button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl btn-press">Cancelar</button><button onclick="execEditItem('${id}')" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl btn-press">Guardar</button></div>
+    `);
+}
+
+async function execEditItem(id) {
+    const nome = $('#eNome').value; const desc = $('#eDesc').value; const preco = parseFloat($('#ePreco').value);
+    if(!nome || isNaN(preco)) return; showLoading();
+    await supabaseClient.from('loja').update({ nome, descricao: desc, preco_base: preco }).eq('id', id);
+    toast('Editado!'); closeModal(); await refreshData(); hideLoading(); render();
+}
+
+render();
+</script>
+</body>
+</html>
+
+
+    <div id="root" class="w-full h-full flex"></div>
+    <div id="modal-container"></div>
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+    <div id="global-loader" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] flex items-center justify-center hidden">
+        <div class="flex flex-col items-center gap-3">
+            <div class="loader w-10 h-10 border-4"></div>
+            <p class="font-bold text-ligra-main animate-pulse">A carregar...</p>
+        </div>
+    </div>
+
+<script>
+// ============================================
+// 1. SUPABASE SETUP & STATE
+// ============================================
+const SUPABASE_URL = 'https://dxgofzbjpabmuptqsscg.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_vbKvJDE0BiTtRxOu6bhW0A_AdAJDEvr';
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const generateId = () => Math.random().toString(36).substr(2, 12);
+
+let appState = {
+    lang: 'pt',
+    currentUser: null,
+    currentView: 'dashboard',
+    filtroTurma: 'todas',
     users: [],
     transacoes: [],
     loja: [],
