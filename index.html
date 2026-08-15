@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LigraBank</title>
+    <!-- LigraBank Base Carregada - Parceiro de Programação -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -130,7 +131,16 @@ function showModal(content) {
     lucide.createIcons();
 }
 function closeModal() { $('#modal-container').innerHTML = ''; }
-function changeView(view) { appState.currentView = view; render(); }
+
+// ATUALIZAÇÃO IMPORTANTE PARA MOBILE: Quando escolhe "logout" no select móvel, aciona a função correta
+function changeView(view) { 
+    if (view === 'logout_action') {
+        handleLogout();
+    } else {
+        appState.currentView = view; 
+        render(); 
+    }
+}
 
 // ============================================
 // 2. AUTH & DB FETCH
@@ -199,17 +209,22 @@ function render() {
         const role = appState.currentUser.role;
         const view = appState.currentView;
         
+        // NOVO: Adicionado opção "Sair" ao select de telemóveis (destacado)
         const mobileOptions = role === 'teacher' ? `
             <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
             <option value="students" ${view === 'students' ? 'selected' : ''}>${t('nav_students')}</option>
             <option value="store" ${view === 'store' ? 'selected' : ''}>${t('nav_store')}</option>
             <option value="requests" ${view === 'requests' ? 'selected' : ''}>${t('nav_requests')}</option>
             <option value="transactions" ${view === 'transactions' ? 'selected' : ''}>Log / Extrato</option>
+            <option disabled>──────────</option>
+            <option value="logout_action">👋 Sair / Logout</option>
         ` : `
             <option value="dashboard" ${view === 'dashboard' ? 'selected' : ''}>${t('nav_dashboard')}</option>
             <option value="mystore" ${view === 'mystore' ? 'selected' : ''}>${t('nav_mystore')}</option>
             <option value="myitems" ${view === 'myitems' ? 'selected' : ''}>${t('nav_myitems')}</option>
             <option value="history" ${view === 'history' ? 'selected' : ''}>${t('nav_history')}</option>
+            <option disabled>──────────</option>
+            <option value="logout_action">👋 Sair / Logout</option>
         `;
 
         root.innerHTML = `
@@ -221,7 +236,7 @@ function render() {
                         <span class="font-black text-lg text-ligra-dark">LigraBank</span>
                     </div>
                     <div class="flex gap-2">
-                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark">${mobileOptions}</select>
+                        <select onchange="changeView(this.value)" class="bg-gray-100 border-none text-sm font-bold rounded-lg px-2 py-2 outline-none text-ligra-dark appearance-none">${mobileOptions}</select>
                     </div>
                 </header>
                 <header class="hidden md:flex bg-white p-4 border-b border-gray-200 justify-end items-center shadow-sm gap-4">
@@ -271,7 +286,6 @@ function renderCharts() {
 }
 
 function renderLoginScreen() {
-    // CORREÇÃO: "relative" adicionado para segurar o botão absolute, e "w-full" garantido.
     return `
     <div class="flex-1 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-ligra-light p-4 relative">
         <button onclick="toggleLang()" class="absolute top-4 right-4 text-sm font-bold text-gray-600 hover:text-ligra-dark flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow"><i data-lucide="globe" class="w-4 h-4"></i> ${t('lang_toggle')}</button>
@@ -393,6 +407,14 @@ function renderTeacherDashboard() {
             </div>
             `}
         </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full mt-6">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2"><i data-lucide="key" class="w-4 h-4 text-ligra-main"></i> ${t('change_pass')}</h3>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="password" id="newPass" placeholder="${t('new_pass')}" class="flex-1 px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 focus:border-ligra-main outline-none font-bold">
+                <button onclick="changeOwnPass()" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-xl font-bold w-full sm:w-auto btn-press">${t('save')}</button>
+            </div>
+        </div>
     </div>
     `;
 }
@@ -438,6 +460,10 @@ function renderTeacherStudents() {
         <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
             <h1 class="text-2xl md:text-3xl font-black text-gray-800">${t('nav_students')}</h1>
             <div class="flex flex-col sm:flex-row gap-2">
+                <!-- NOVO: Adicionado botão para Cadastro Manual de Aluno -->
+                <button onclick="modalAddAlunoManual()" class="text-center justify-center bg-ligra-main hover:bg-blue-600 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2 text-sm shadow-sm">
+                    <i data-lucide="user-plus" class="w-4 h-4"></i> Novo Aluno
+                </button>
                 <label class="text-center justify-center bg-gray-800 hover:bg-gray-900 text-white px-4 py-3 md:py-2 rounded-xl font-bold cursor-pointer btn-press flex items-center gap-2 text-sm">
                     <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Sincronizar (Alunos/Saldos CSV)
                     <input type="file" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
@@ -496,6 +522,70 @@ function renderTeacherStudents() {
         </div>
     </div>
     `;
+}
+
+// NOVO: Adicionar Aluno Manualmente
+function modalAddAlunoManual() {
+    showModal(`
+        <h3 class="text-xl font-black text-gray-800 mb-4">Adicionar Aluno (Manual)</h3>
+        <p class="text-xs text-gray-500 mb-4">Se não souber o e-mail real agora, deixe em branco e o sistema criará um temporário automático.</p>
+        <div class="space-y-4">
+            <input type="text" id="mNome" placeholder="Nome Completo *" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="text" id="mTurma" placeholder="Turma (ex: 3º Ano B) *" value="${appState.filtroTurma !== 'todas' ? appState.filtroTurma : ''}" required class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="email" id="mEmail" placeholder="E-mail (opcional)" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+            <input type="number" id="mSaldo" placeholder="Saldo Inicial (opcional)" class="w-full px-4 py-3 rounded-xl border-2 border-gray-100 bg-gray-50 outline-none font-bold">
+        </div>
+        <div class="flex gap-3 mt-6">
+            <button onclick="closeModal()" class="flex-1 py-3 bg-gray-100 text-gray-600 font-bold rounded-xl btn-press">Cancelar</button>
+            <button onclick="execAddAlunoManual()" class="flex-1 py-3 bg-ligra-main text-white font-bold rounded-xl btn-press">Salvar</button>
+        </div>
+    `);
+}
+
+async function execAddAlunoManual() {
+    const nome = $('#mNome').value.trim();
+    const turma = $('#mTurma').value.trim();
+    let email = $('#mEmail').value.trim();
+    const saldo = parseFloat($('#mSaldo').value) || 0;
+
+    if (!nome || !turma) return toast('Nome e Turma são obrigatórios!', 'error');
+
+    // Se o professor não deu um email, criamos um falso e seguro para uso no sistema
+    if (!email) {
+        const fakeSlug = nome.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 5) + Math.floor(Math.random() * 1000);
+        email = `aluno.${fakeSlug}@portalsesisp.org.br`;
+    }
+
+    if (!email.endsWith('@portalsesisp.org.br')) {
+        return toast('O e-mail deve terminar com @portalsesisp.org.br', 'error');
+    }
+
+    showLoading();
+    const newId = generateId();
+    const { error } = await supabaseClient.from('users').insert([{ 
+        id: newId, 
+        role: 'student', 
+        nome: nome, 
+        email: email, 
+        password: '123', 
+        saldo: saldo, 
+        turma: turma 
+    }]);
+
+    if (error) {
+        toast('Erro ao adicionar aluno. O e-mail já existe?', 'error');
+    } else {
+        // Se começou com saldo positivo, regista no extrato
+        if (saldo > 0) {
+            await supabaseClient.from('transacoes').insert([{ id: generateId(), aluno_id: newId, tipo: 'credito', valor: saldo, descricao: 'Depósito Inicial (Manual)' }]);
+        }
+        toast('Aluno adicionado com sucesso!');
+        closeModal();
+    }
+    
+    await refreshData();
+    hideLoading();
+    render();
 }
 
 async function handleCSVUpload(event) {
@@ -943,5 +1033,3 @@ render();
 </script>
 </body>
 </html>
-
-
